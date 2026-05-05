@@ -17,20 +17,31 @@ export const getAccountUser = cache(async (): Promise<AccountUser | null> => {
 
   const model = pb.authStore.model;
 
+  // Expand the `account` relation to retrieve cw_company_recid from the
+  // linked accounts record (portal_users.account → accounts.cw_company_recid).
+  // portal_users.account has maxSelect=0, so PocketBase expands it as an array.
+  const portalUser = await pb.collection("portal_users").getOne(model["id"] as string, { expand: "account" });
+
+  const expandData = portalUser.expand as Record<string, unknown> | undefined;
+  const accountRaw = expandData?.account;
+  const account = (Array.isArray(accountRaw) ? accountRaw[0] : accountRaw) as Record<string, unknown> | undefined;
+
+  if (!account) return null;
+
   return {
-    id: model["id"] as string,
-    account_id: model["id"] as string,
-    user_id: model["id"] as string,
-    email: model["email"] as string,
-    role: (model["role"] as "admin" | "viewer") ?? "viewer",
-    otp_used: (model["otp_used"] as boolean) ?? false,
-    created_at: model["created"] as string,
+    id: portalUser["id"] as string,
+    account_id: account["id"] as string,
+    user_id: portalUser["id"] as string,
+    email: portalUser["email"] as string,
+    role: (portalUser["role"] as "viewer" | "manager") ?? "viewer",
+    otp_used: (portalUser["otp_used"] as boolean) ?? false,
+    created_at: portalUser["created"] as string,
     accounts: {
-      id: model["id"] as string,
-      cw_company_recid: model["cw_company_recid"] as number,
-      company_name: model["company_name"] as string,
-      is_active: (model["is_active"] as boolean) ?? true,
-      created_at: model["created"] as string,
+      id: account["id"] as string,
+      cw_company_recid: account["cw_company_recid"] as number,
+      company_name: account["company_name"] as string,
+      is_active: (account["is_active"] as boolean) ?? true,
+      created_at: account["created"] as string,
     },
   };
 });

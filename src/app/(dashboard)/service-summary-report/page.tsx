@@ -4,17 +4,13 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { type DateRange } from "react-day-picker";
 import { toast } from "sonner";
-import { createClient } from "@/lib/pocketbase/client";
 import { getReportPreview } from "@/lib/api/report";
+import { fetchCompanyName } from "./actions";
 import { useTrack } from "@/hooks/use-track";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { Button } from "@/components/ui/button";
 import ReportTicketsTable from "@/components/portal/report-tickets-table";
-import { DEV_BYPASS } from "@/lib/dev-bypass";
 import type { TicketRecord } from "@/types";
-
-// Dev mode company
-const DEV_COMPANY_NAME = "Training Alliance Group (TAG)";
 
 export default function TicketsPage() {
   const { track } = useTrack();
@@ -25,31 +21,21 @@ export default function TicketsPage() {
   const [tickets, setTickets] = useState<TicketRecord[] | null>(null);
   const [totalTickets, setTotalTickets] = useState(0);
 
-  // Resolve company name from PocketBase account_users collection on mount
+  // Resolve company name via server action on mount
   useEffect(() => {
-    async function resolveCompany() {
-      if (DEV_BYPASS) {
-        setCompanyName(DEV_COMPANY_NAME);
-        return;
-      }
-
-      const pb = createClient();
-      const model = pb.authStore.model;
-      if (!model) return;
-
-      try {
-        const result = await pb.collection("account_users").getFirstListItem(`user_id = "${model.id}"`, {
-          expand: "account_id",
-        });
-        const company = (result.expand as Record<string, Record<string, unknown>> | undefined)?.account_id?.company_name as string | undefined;
-        if (company) setCompanyName(company);
+    // fetch("http://10.90.90.33:8001/api/report/preview", {
+    // method: "POST",
+    // headers: { "Content-Type": "application/json" },
+    // body: JSON.stringify({ company_name: "Training Alliance Group (TAG)", start_date: "2026-05-01", end_date: "2026-05-05" }),
+    // })
+    // .then((r) => r.json())
+    // .then((d) => console.log(JSON.stringify(d.data?.[0], null, 2)));
+    fetchCompanyName()
+      .then((name) => {
+        if (name) setCompanyName(name);
         else toast.error("Could not resolve your company. Please contact support.");
-      } catch {
-        toast.error("Failed to load your account. Please refresh or contact support.");
-      }
-    }
-
-    resolveCompany();
+      })
+      .catch(() => toast.error("Failed to load your account. Please refresh or contact support."));
   }, []);
 
   // Track page view once
@@ -66,6 +52,7 @@ export default function TicketsPage() {
     setTickets(null);
     try {
       const result = await getReportPreview(companyName!, format(dateRange!.from!, "yyyy-MM-dd"), format(dateRange!.to!, "yyyy-MM-dd"));
+      console.log("Report result:", result.data);
       setTickets(result.data);
       setTotalTickets(result.total_tickets);
       track({

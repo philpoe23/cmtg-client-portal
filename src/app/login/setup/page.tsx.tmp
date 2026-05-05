@@ -102,19 +102,6 @@ export default function SetupPage() {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Saving…" : "Set Password"}
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => {
-                  const pb = createClient();
-                  pb.authStore.clear();
-                  document.cookie = pb.authStore.exportToCookie({ httpOnly: false, sameSite: "Lax", expires: new Date(0) });
-                  router.push("/login");
-                }}
-              >
-                Log out
-              </Button>
             </form>
           </CardContent>
         </Card>

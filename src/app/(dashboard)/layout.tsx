@@ -14,7 +14,13 @@ const SEGMENT_LABELS: Record<string, string> = {
 
 function getLabel(segment: string): string {
   if (/^\d+$/.test(segment)) return `#${segment}`;
-  return SEGMENT_LABELS[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1);
+  return (
+    SEGMENT_LABELS[segment] ??
+    segment
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ")
+  );
 }
 
 function buildCrumbs(pathname: string): { label: string; href: string }[] {

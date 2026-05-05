@@ -13,23 +13,34 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
 import { GalleryVerticalEndIcon } from "lucide-react";
+import { NavUser } from "@/components/ui/nav-user";
+import { useAuth } from "@/contexts/auth-context";
 
 // This is sample data.
 const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "#",
+      url: "/dashboard",
     },
     {
       title: "Service Summary Report",
-      url: "#",
+      url: "/service-summary-report",
     },
   ],
 };
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user } = useAuth();
+
+  const userData = {
+    name: user?.name || user?.email?.split("@")[0] || "",
+    email: user?.email || "",
+    avatar: "",
+  };
+
   return (
     <Sidebar variant="floating" {...props}>
       <SidebarHeader>
@@ -69,6 +80,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <NavUser user={userData} />
+      </SidebarFooter>
     </Sidebar>
   );
 }

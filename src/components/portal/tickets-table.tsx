@@ -62,7 +62,7 @@ export default function TicketsTable({ tickets, loading }: TicketsTableProps) {
               <TableCell className="font-mono text-xs text-muted-foreground">{ticket.id}</TableCell>
               <TableCell>
                 <Link
-                  href={`/portal/tickets/${ticket.id}`}
+                  href={`/service-summary-report/${ticket.id}`}
                   className="text-sm font-medium hover:underline"
                   onClick={() =>
                     track({

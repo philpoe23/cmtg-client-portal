@@ -1,4 +1,4 @@
-import type { TicketDetail, TicketFilters, TicketSummary, TicketsResponse } from "@/types";
+import type { CompanyTicketsResponse, TicketDetail, TicketFilters, TicketSummary, TicketsResponse } from "@/types";
 
 const TICKETS_API_URL = process.env.NEXT_PUBLIC_TICKETS_API_URL;
 
@@ -18,6 +18,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export async function getTicketSummary(cwCompanyRecid: number, accessToken: string): Promise<TicketSummary> {
+  console.log(`Calling ${`${TICKETS_API_URL}/tickets/summary?company_recid=${cwCompanyRecid}`} with token ${accessToken}`);
   const res = await fetch(`${TICKETS_API_URL}/tickets/summary?company_recid=${cwCompanyRecid}`, { headers: authHeaders(accessToken) });
   return handleResponse<TicketSummary>(res);
 }
@@ -43,4 +44,19 @@ export async function getTickets(cwCompanyRecid: number, accessToken: string, fi
 export async function getTicket(cwCompanyRecid: number, ticketId: number, accessToken: string): Promise<TicketDetail> {
   const res = await fetch(`${TICKETS_API_URL}/tickets/${ticketId}?company_recid=${cwCompanyRecid}`, { headers: authHeaders(accessToken) });
   return handleResponse<TicketDetail>(res);
+}
+
+export async function getCompanyTickets(
+  companyId: number,
+  accessToken: string,
+  params: { start_date?: string; end_date?: string } = {},
+): Promise<CompanyTicketsResponse> {
+  const query = new URLSearchParams();
+  if (params.start_date) query.set("start_date", params.start_date);
+  if (params.end_date) query.set("end_date", params.end_date);
+  const qs = query.toString();
+  const res = await fetch(`${TICKETS_API_URL}/api/companies/${companyId}/tickets${qs ? `?${qs}` : ""}`, {
+    headers: authHeaders(accessToken),
+  });
+  return handleResponse<CompanyTicketsResponse>(res);
 }

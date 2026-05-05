@@ -92,6 +92,27 @@ export interface TicketFilters {
   page_size?: number;
 }
 
+export interface CompanyTicket {
+  ticket_id: number;
+  company: string;
+  contact: string | null;
+  contact_name: string | null;
+  status: string;
+  board: string;
+  service_type: string | null;
+  priority: string;
+  date_entered: string;
+  date_closed: string | null;
+  closed_flag: boolean;
+  summary: string;
+  url: string | null;
+}
+
+export interface CompanyTicketsResponse {
+  total_tickets: number;
+  tickets: CompanyTicket[];
+}
+
 // ─── PocketBase ─────────────────────────────────────────────────────────────
 
 export interface Account {
@@ -107,7 +128,7 @@ export interface AccountUser {
   account_id: string;
   user_id: string;
   email: string;
-  role: "admin" | "viewer";
+  role: "viewer" | "manager";
   otp_used: boolean;
   created_at: string;
   accounts?: Account;

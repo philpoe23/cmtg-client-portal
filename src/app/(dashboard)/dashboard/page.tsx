@@ -3,10 +3,14 @@ import Link from "next/link";
 import { createClient } from "@/lib/pocketbase/server";
 import { getAccountUser } from "@/lib/server/get-account";
 import { DEV_BYPASS } from "@/lib/dev-bypass";
-import { getTicketSummary, getTickets } from "@/lib/api/tickets";
+import { getTicketSummary, getCompanyTickets } from "@/lib/api/tickets";
 import StatsCard from "@/components/portal/stats-card";
-import { TicketStatusBadge } from "@/components/portal/ticket-status-badge";
+import { DashboardTicketsTable } from "@/components/portal/dashboard-tickets-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+function formatDate(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
 
 export default async function DashboardPage() {
   if (!DEV_BYPASS) {
@@ -15,7 +19,14 @@ export default async function DashboardPage() {
   }
 
   const accountUser = await getAccountUser();
-  if (!accountUser?.accounts) redirect("/login");
+  if (!accountUser?.accounts) {
+    return (
+      <div className="space-y-4 max-w-5xl">
+        <h1 className="text-xl font-semibold">Dashboard</h1>
+        <p className="text-destructive text-sm">Your account is not linked to a company. Please contact your administrator.</p>
+      </div>
+    );
+  }
 
   const cwCompanyRecid = accountUser.accounts.cw_company_recid;
   let accessToken = "";
@@ -24,59 +35,52 @@ export default async function DashboardPage() {
     accessToken = pb.authStore.token;
   }
 
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(today.getDate() - 30);
+
   const [summary, recentTickets] = await Promise.allSettled([
     getTicketSummary(cwCompanyRecid, accessToken),
-    getTickets(cwCompanyRecid, accessToken, { page: 1, page_size: 5 }),
+    getCompanyTickets(cwCompanyRecid, accessToken, {
+      start_date: formatDate(thirtyDaysAgo),
+      end_date: formatDate(today),
+    }),
   ]);
 
   const stats = summary.status === "fulfilled" ? summary.value : null;
   const recent = recentTickets.status === "fulfilled" ? recentTickets.value : null;
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      <div>
+    <div className="space-y-6">
+      <div className="max-w-5xl">
         <h1 className="text-xl font-semibold">Dashboard</h1>
         <p className="text-muted-foreground text-sm mt-0.5">Overview of your support tickets</p>
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4 max-w-5xl">
         <StatsCard title="Open" value={stats?.open ?? 0} />
         <StatsCard title="In Progress" value={stats?.in_progress ?? 0} />
         <StatsCard title="Waiting" value={stats?.waiting ?? 0} variant="warning" />
-        <StatsCard title="Closed" value={stats?.closed ?? 0} variant="muted" />
       </div>
 
-      {/* Recent tickets */}
+      {/* Tickets last 30 days */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-sm font-semibold">Recent Tickets</CardTitle>
-          <Link href="/portal/tickets" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <div>
+            <CardTitle className="text-sm font-semibold">Tickets — Last 30 Days</CardTitle>
+            {recent && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {recent.total_tickets} ticket{recent.total_tickets !== 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
+          <Link href="/dashboard/tickets" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             View all →
           </Link>
         </CardHeader>
         <CardContent className="pt-0">
-          {recent?.tickets?.length ? (
-            <div className="divide-y divide-border -mx-6">
-              {recent.tickets.map((ticket) => (
-                <Link
-                  key={ticket.id}
-                  href={`/portal/tickets/${ticket.id}`}
-                  className="flex items-center justify-between px-6 py-3 hover:bg-secondary/40 transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{ticket.summary}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      #{ticket.id} · {ticket.board_name}
-                    </p>
-                  </div>
-                  <TicketStatusBadge status={ticket.status} className="ml-4 shrink-0" />
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-10">No recent tickets</p>
-          )}
+          <DashboardTicketsTable tickets={recent?.tickets ?? []} />
         </CardContent>
       </Card>
     </div>

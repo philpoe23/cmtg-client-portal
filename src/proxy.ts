@@ -1,7 +1,7 @@
 import PocketBase from "pocketbase";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Skip all auth checks in dev bypass mode
   if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
     return NextResponse.next({ request });
@@ -49,10 +49,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // Fully set up: redirect away from auth area and root
-  if (isLoginArea || pathname === "/") {
+  // Fully set up: redirect root to dashboard
+  if (pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = "/portal/dashboard";
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 

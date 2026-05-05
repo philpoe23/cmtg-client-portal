@@ -6,8 +6,8 @@ import { LayoutDashboard, Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/portal/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/portal/tickets", label: "Tickets", icon: Ticket },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/service-summary-report", label: "Service Summary Report", icon: Ticket },
 ];
 
 export default function Sidebar() {

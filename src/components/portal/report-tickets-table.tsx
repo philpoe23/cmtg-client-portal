@@ -316,7 +316,6 @@ function TicketsTabContent({ tickets }: { tickets: TicketRecord[] }) {
                 <SortableHeader label="Created" sortKey="Created Date" {...shProps} className="hidden w-28 md:table-cell" />
                 <SortableHeader label="Contact" sortKey="Primary Contact" {...shProps} className="hidden w-36 md:table-cell" />
                 <SortableHeader label="Board" sortKey="Board" {...shProps} className="hidden w-32 lg:table-cell" />
-                <SortableHeader label="Type" sortKey="Ticket Type" {...shProps} className="hidden w-28 lg:table-cell" />
                 <SortableHeader label="Priority" sortKey="SLA Priority" {...shProps} className="hidden w-24 lg:table-cell" />
                 <SortableHeader label="Attainment" sortKey="SLA Attainment" {...shProps} className="w-24" />
                 <TableHead className="w-20 text-xs">SLA Status</TableHead>
@@ -338,7 +337,6 @@ function TicketsTabContent({ tickets }: { tickets: TicketRecord[] }) {
                   <TableCell className="hidden text-xs md:table-cell">{formatDate(ticket["Created Date"])}</TableCell>
                   <TableCell className="hidden text-xs md:table-cell">{ticket["Primary Contact"]}</TableCell>
                   <TableCell className="hidden text-xs lg:table-cell">{ticket.Board}</TableCell>
-                  <TableCell className="hidden text-xs lg:table-cell">{ticket["Ticket Type"]}</TableCell>
                   <TableCell className="hidden text-xs lg:table-cell">{ticket["SLA Priority"]}</TableCell>
                   <TableCell>
                     <SlaAttainmentBadge value={ticket["SLA Attainment"]} />

@@ -61,7 +61,7 @@ export default async function TicketDetailPage({ params }: TicketDetailPageProps
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Back link */}
-      <Link href="/portal/tickets" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+      <Link href="/service-summary-report" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
         <ChevronLeft size={13} />
         Back to Tickets
       </Link>

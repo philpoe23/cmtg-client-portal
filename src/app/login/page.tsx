@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import pb from "@/lib/pocketbase";
 
 type Step = "credentials" | "mfa";
 
@@ -26,10 +27,9 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const pb = createClient();
-      await pb.collection("accounts").authWithPassword(email, password);
+      await pb.collection("portal_users").authWithPassword(email, password);
       document.cookie = pb.authStore.exportToCookie({ httpOnly: false, sameSite: "Lax" });
-      router.push("/portal/dashboard");
+      router.push("/dashboard");
       router.refresh();
     } catch (err) {
       if (err instanceof ClientResponseError && err.response?.mfaId) {
@@ -47,10 +47,9 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const pb = createClient();
-      await pb.collection("accounts").authWithOTP(mfaId!, totpCode);
+      await pb.collection("portal_users").authWithOTP(mfaId!, totpCode);
       document.cookie = pb.authStore.exportToCookie({ httpOnly: false, sameSite: "Lax" });
-      router.push("/portal/dashboard");
+      router.push("/dashboard");
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid code");
