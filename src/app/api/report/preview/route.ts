@@ -31,6 +31,7 @@ function transformTicket(raw: Record<string, any>) {
       raw["Written Off / Non-Billable Hours"] ?? raw.Written_Off_Hours ?? (raw.Write_Off_Hours ?? 0) + (raw.Non_Billable_Hours ?? raw.non_billable_hours ?? 0),
     "Total Hours": raw["Total Hours"] ?? raw.Total_Hours ?? raw.total_hours ?? 0,
     Closed_Flag: raw.Closed_Flag === true || raw.Closed_Flag === 1 ? 1 : 0,
+    hours_summary: raw.hours_summary ?? null,
   };
 }
 

@@ -9,6 +9,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export async function getReportPreview(company_name: string, start_date: string, end_date: string): Promise<ReportPreviewResponse> {
+  console.log("Fetching report preview with", { company_name, start_date, end_date });
   const res = await fetch("/api/report/preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

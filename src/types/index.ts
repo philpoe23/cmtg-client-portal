@@ -1,5 +1,31 @@
 // ─── Report API ─────────────────────────────────────────────────────────────
 
+export interface HoursEntry {
+  agreement: string;
+  work_type: string;
+  technician: string;
+  billable_hours: string;
+  non_billable_hours: string;
+  actual_hours: string;
+  billable_amount: string;
+}
+
+export interface HoursPeriod {
+  period: string;
+  is_current_month: boolean;
+  billable_hours: string;
+  non_billable_hours: string;
+  actual_hours: string;
+  entries: HoursEntry[];
+}
+
+export interface HoursSummary {
+  this_month_hours: number | string;
+  prior_months_hours: string;
+  total_hours: string;
+  by_period: HoursPeriod[];
+}
+
 export interface TicketRecord {
   "Ticket #": number;
   "Primary Contact": string;
@@ -26,6 +52,7 @@ export interface TicketRecord {
   "Written Off / Non-Billable Hours": number;
   "Total Hours": number;
   Closed_Flag: 0 | 1;
+  hours_summary: HoursSummary | null;
 }
 
 export interface ReportPreviewResponse {
