@@ -4,13 +4,12 @@ import type { ReactNode } from "react";
 import { useState, useMemo } from "react";
 import { type DateRange } from "react-day-picker";
 import { isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
-import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Combobox, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty } from "@/components/ui/combobox";
+import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty } from "@/components/ui/combobox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -76,21 +75,23 @@ function SmartSearchBar({
     <div className="flex h-9 items-center overflow-hidden rounded-md border border-input bg-background shadow-xs transition-shadow focus-within:ring-[3px] focus-within:ring-ring/50">
       {/* Column picker */}
       <Popover>
-        <PopoverTrigger
-          render={
-            <button className="flex h-full shrink-0 select-none items-center gap-1 border-r border-input px-2.5 text-xs hover:bg-muted/50">
-              <Search className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="max-w-20 truncate">{searchColumn.header}</span>
-              <ChevronDown className="h-3 w-3 opacity-50" />
-            </button>
-          }
-        />
-        <PopoverContent align="start" className="w-44 p-1">
+        <PopoverTrigger>
+          <Button variant="outline" size="sm" className="rounded-r-none border-r-0 gap-1 px-2.5 shrink-0 h-9">
+            <Search className="h-3.5 w-3.5" />
+            <span className="text-xs max-w-20 truncate">{searchColumn.header}</span>
+            <ChevronDown className="h-3 w-3 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-44 p-1 gap-1">
           {SEARCHABLE_COLUMNS.map((col) => (
             <button
               key={col.key}
-              className={cn("w-full rounded-sm px-3 py-1.5 text-left text-sm hover:bg-accent", searchColumn.key === col.key && "bg-accent font-medium")}
-              onClick={() => setSearchColumn(col)}
+              className={`w-full text-left text-sm px-3 py-1.5 rounded-sm hover:bg-accent ${searchColumn.key === col.key ? "bg-accent font-medium" : ""}`}
+              onClick={() => {
+                setSearchColumn(col);
+                setSearchValue("");
+                setSearchDate(undefined);
+              }}
             >
               {col.header}
             </button>
@@ -105,14 +106,16 @@ function SmartSearchBar({
         </div>
       )}
 
-      {/* Combobox input — Base UI Combobox dropdown */}
+      {/* Combobox input */}
       {searchColumn.searchType === "combobox" && (
-        <Combobox<string> onValueChange={(v) => setSearchValue(v ?? "")}>
-          <ComboboxPrimitive.Input
-            render={<input className="h-full w-48 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground" />}
+        <Combobox<string> value={searchValue} onValueChange={(v) => setSearchValue(v ?? "")}>
+          <ComboboxInput
+            placeholder={`Filter by ${searchColumn.header.toLowerCase()}…`}
+            className="rounded-none border-0 bg-transparent shadow-none dark:bg-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-0"
+            showTrigger={false}
+            showClear={!!searchValue}
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
-            placeholder={`Filter by ${searchColumn.header.toLowerCase()}…`}
           />
           <ComboboxContent>
             <ComboboxList>
@@ -131,7 +134,7 @@ function SmartSearchBar({
       {(searchColumn.searchType === "text" || searchColumn.searchType === "number") && (
         <input
           type={searchColumn.searchType === "number" ? "number" : "text"}
-          placeholder={`Search by ${searchColumn.header.toLowerCase()}…`}
+          placeholder={`Search by ${searchColumn.header.toLowerCase()}`}
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           className="h-full w-48 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground"
@@ -747,7 +750,7 @@ function ColumnsToggle({ visible, onChange }: { visible: Set<string>; onChange: 
           </Button>
         }
       />
-      <PopoverContent align="end" className="w-48 p-1">
+      <PopoverContent align="end" className="w-48 p-1 gap-1">
         {TABLE_COLUMNS.filter((c) => !c.alwaysVisible).map((col) => {
           const checked = visible.has(col.key);
           return (
@@ -857,24 +860,27 @@ export default function ReportTicketsTable({ tickets, periodLabel }: ReportTicke
       <Card className="gap-0 overflow-hidden py-0">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <SmartSearchBar
-            data={tabTickets}
-            searchColumn={searchColumn}
-            setSearchColumn={(col) => {
-              setSearchColumn(col);
-              setSearchValue("");
-              setSearchDate(undefined);
-            }}
-            searchValue={searchValue}
-            setSearchValue={setSearchValue}
-            searchDate={searchDate}
-            setSearchDate={setSearchDate}
-          />
-          <TabsList>
-            <TabsTrigger value="all">All ({tickets.length})</TabsTrigger>
-            <TabsTrigger value="open">Open &amp; In Progress ({openTickets.length})</TabsTrigger>
-            <TabsTrigger value="closed">Closed ({closedTickets.length})</TabsTrigger>
-          </TabsList>
+          <div>
+            <TabsList className="mb-2">
+              <TabsTrigger value="all">All ({tickets.length})</TabsTrigger>
+              <TabsTrigger value="open">Open &amp; In Progress ({openTickets.length})</TabsTrigger>
+              <TabsTrigger value="closed">Closed ({closedTickets.length})</TabsTrigger>
+            </TabsList>
+            <SmartSearchBar
+              data={tabTickets}
+              searchColumn={searchColumn}
+              setSearchColumn={(col) => {
+                setSearchColumn(col);
+                setSearchValue("");
+                setSearchDate(undefined);
+              }}
+              searchValue={searchValue}
+              setSearchValue={setSearchValue}
+              searchDate={searchDate}
+              setSearchDate={setSearchDate}
+            />
+          </div>
+
           <ColumnsToggle visible={visibleColumns} onChange={setVisibleColumns} />
         </div>
 
