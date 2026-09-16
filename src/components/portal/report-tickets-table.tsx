@@ -393,7 +393,7 @@ function TextBlock({ label, text }: { label: string; text: string }) {
 
 // ─── Ticket detail dialog ────────────────────────────────────────────────────
 
-function TicketDetailDialog({ ticket, open, onClose, periodLabel }: { ticket: TicketRecord; open: boolean; onClose: () => void; periodLabel: string }) {
+export function TicketDetailDialog({ ticket, open, onClose, periodLabel }: { ticket: TicketRecord; open: boolean; onClose: () => void; periodLabel: string }) {
   return (
     <Dialog
       open={open}

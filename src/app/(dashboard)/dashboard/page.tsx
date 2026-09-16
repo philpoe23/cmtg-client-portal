@@ -4,6 +4,7 @@ import { createClient } from "@/lib/pocketbase/server";
 import { getAccountUser } from "@/lib/server/get-account";
 import { DEV_BYPASS } from "@/lib/dev-bypass";
 import { getTicketSummary, getCompanyTickets } from "@/lib/api/tickets";
+import { fetchReportPreview } from "@/lib/server/report";
 import StatsCard from "@/components/portal/stats-card";
 import { DashboardTicketsTable } from "@/components/portal/dashboard-tickets-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,16 +40,19 @@ export default async function DashboardPage() {
   const thirtyDaysAgo = new Date(today);
   thirtyDaysAgo.setDate(today.getDate() - 30);
 
-  const [summary, recentTickets] = await Promise.allSettled([
+  const startDate = formatDate(thirtyDaysAgo);
+  const endDate = formatDate(today);
+
+  const [summary, recentTickets, reportPreview] = await Promise.allSettled([
     getTicketSummary(cwCompanyRecid, accessToken),
-    getCompanyTickets(cwCompanyRecid, accessToken, {
-      start_date: formatDate(thirtyDaysAgo),
-      end_date: formatDate(today),
-    }),
+    getCompanyTickets(cwCompanyRecid, accessToken, { start_date: startDate, end_date: endDate }),
+    fetchReportPreview(accountUser.accounts.company_name, startDate, endDate),
   ]);
 
   const stats = summary.status === "fulfilled" ? summary.value : null;
   const recent = recentTickets.status === "fulfilled" ? recentTickets.value : null;
+  const openTickets = recent?.tickets.filter((t) => !t.closed_flag) ?? [];
+  const reportTickets = reportPreview.status === "fulfilled" ? reportPreview.value.data : [];
 
   return (
     <div className="space-y-6">
@@ -64,23 +68,21 @@ export default async function DashboardPage() {
         <StatsCard title="Waiting" value={stats?.waiting ?? 0} variant="warning" />
       </div>
 
-      {/* Tickets last 30 days */}
+      {/* Open / In Progress / Waiting tickets */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
-            <CardTitle className="text-sm font-semibold">Tickets — Last 30 Days</CardTitle>
-            {recent && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {recent.total_tickets} ticket{recent.total_tickets !== 1 ? "s" : ""}
-              </p>
-            )}
+            <CardTitle className="text-sm font-semibold">Open, In Progress &amp; Waiting Tickets</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {openTickets.length} ticket{openTickets.length !== 1 ? "s" : ""} in the last 30 days
+            </p>
           </div>
           <Link href="/dashboard/tickets" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             View all →
           </Link>
         </CardHeader>
         <CardContent className="pt-0">
-          <DashboardTicketsTable tickets={recent?.tickets ?? []} />
+          <DashboardTicketsTable tickets={openTickets} reportTickets={reportTickets} />
         </CardContent>
       </Card>
     </div>

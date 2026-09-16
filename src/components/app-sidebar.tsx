@@ -36,8 +36,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth();
 
   const userData = {
+    firstName: user?.first_name || "",
+    lastName: user?.last_name || "",
     name: user?.name || user?.email?.split("@")[0] || "",
     email: user?.email || "",
+    accountName: user?.accountName || "",
     avatar: "",
   };
 
@@ -46,15 +49,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<a href="#" />}>
+            <div className="flex items-center gap-2">
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-white text-white-foreground">
                 <img src="/images/logo.png" alt="Logo" className="size-4" />
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
-                <span className="font-medium">Client Portal</span>
-                <span className="">v1.0.0</span>
+                <span className="font-small">Client Portal</span>
               </div>
-            </SidebarMenuButton>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

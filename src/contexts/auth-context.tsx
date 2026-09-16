@@ -6,8 +6,11 @@ import { createClient } from "@/lib/pocketbase/client";
 
 export interface User {
   id: string;
+  first_name: string;
+  last_name: string;
   name: string;
   email: string;
+  accountName: string;
 }
 
 interface AuthContextType {
@@ -27,23 +30,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const pb = createClient();
-    pb.authStore.loadFromCookie(document.cookie);
+    const hydrateUser = async () => {
+      const pb = createClient();
+      pb.authStore.loadFromCookie(document.cookie);
 
-    if (pb.authStore.isValid && pb.authStore.model) {
-      const model = pb.authStore.model;
-      setUser({
-        id: model["id"] as string,
-        name: (model["name"] as string | undefined) || (model["email"] as string),
-        email: model["email"] as string,
-      });
-      setIsAuthenticated(true);
-    } else {
-      setUser(null);
-      setIsAuthenticated(false);
-    }
+      if (pb.authStore.isValid && pb.authStore.model) {
+        try {
+          const model = pb.authStore.model;
+          const portalUser = await pb.collection("portal_users").getOne(model["id"] as string, { expand: "account" });
+          const expandData = portalUser.expand as Record<string, unknown> | undefined;
+          const accountRaw = expandData?.account;
+          const account = (Array.isArray(accountRaw) ? accountRaw[0] : accountRaw) as Record<string, unknown> | undefined;
+          const firstName = (portalUser["first_name"] as string | undefined) || "";
+          const lastName = (portalUser["last_name"] as string | undefined) || "";
+          const displayName = [firstName, lastName].filter(Boolean).join(" ") || (portalUser["email"] as string) || "User";
 
-    setIsLoading(false);
+          setUser({
+            id: portalUser["id"] as string,
+            first_name: firstName,
+            last_name: lastName,
+            name: displayName,
+            email: (portalUser["email"] as string) || "",
+            accountName: ((account?.["company_name"] as string | undefined) || "") as string,
+          });
+          setIsAuthenticated(true);
+        } catch {
+          const model = pb.authStore.model;
+          const fallbackName = (model["name"] as string | undefined) || (model["email"] as string) || "User";
+          setUser({
+            id: model["id"] as string,
+            first_name: (model["first_name"] as string | undefined) || "",
+            last_name: (model["last_name"] as string | undefined) || "",
+            name: fallbackName,
+            email: (model["email"] as string) || "",
+            accountName: "",
+          });
+          setIsAuthenticated(true);
+        }
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
+      }
+
+      setIsLoading(false);
+    };
+
+    hydrateUser();
   }, []);
 
   const signIn = () => {

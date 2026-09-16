@@ -15,17 +15,44 @@ import {
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/auth-context";
 
+function getInitials(name: string, email: string) {
+  const source = (name || email || "").trim();
+
+  if (!source) {
+    return "U";
+  }
+
+  const parts = source.split(/\s+/).filter(Boolean);
+
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+
+  return source.slice(0, 2).toUpperCase();
+}
+
 export function NavUser({
   user,
 }: {
   user: {
-    name: string;
+    firstName?: string;
+    lastName?: string;
+    name?: string;
     email: string;
+    accountName?: string;
     avatar: string;
   };
 }) {
   const { isMobile } = useSidebar();
   const { signOut } = useAuth();
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.name || user.email || "User";
+  const initials =
+    [user.firstName, user.lastName]
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || (user.email || "U").slice(0, 2).toUpperCase();
 
   return (
     <SidebarMenu>
@@ -35,12 +62,13 @@ export function NavUser({
             render={<SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground" />}
           >
             <Avatar className="h-8 w-8 rounded-lg grayscale">
-              <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+              <AvatarImage src={user.avatar} alt={fullName} />
+              <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{user.name}</span>
+              <span className="truncate font-medium">{fullName}</span>
               <span className="text-muted-foreground truncate text-xs">{user.email}</span>
+              {user.accountName ? <span className="text-muted-foreground truncate text-[10px] uppercase tracking-wide">{user.accountName}</span> : null}
             </div>
             <IconDotsVertical className="ml-auto size-4" />
           </DropdownMenuTrigger>
@@ -54,12 +82,13 @@ export function NavUser({
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                    <AvatarImage src={user.avatar} alt={fullName} />
+                    <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{user.name}</span>
+                    <span className="truncate font-medium">{fullName}</span>
                     <span className="text-muted-foreground truncate text-xs">{user.email}</span>
+                    {user.accountName ? <span className="text-muted-foreground truncate text-[10px] uppercase tracking-wide">{user.accountName}</span> : null}
                   </div>
                 </div>
               </DropdownMenuLabel>

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import type { CompanyTicket } from "@/types";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import type { CompanyTicket, TicketRecord } from "@/types";
 import { TicketStatusBadge } from "@/components/portal/ticket-status-badge";
+import { TicketDetailDialog } from "@/components/portal/report-tickets-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
@@ -10,10 +12,15 @@ const PAGE_SIZE = 25;
 
 interface DashboardTicketsTableProps {
   tickets: CompanyTicket[];
+  reportTickets: TicketRecord[];
 }
 
-export function DashboardTicketsTable({ tickets }: DashboardTicketsTableProps) {
+export function DashboardTicketsTable({ tickets, reportTickets }: DashboardTicketsTableProps) {
   const [page, setPage] = useState(1);
+  const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const reportTicketsById = useMemo(() => new Map(reportTickets.map((t) => [t["Ticket #"], t])), [reportTickets]);
 
   const filteredTickets = tickets.filter((t) => t.contact_name);
   const totalPages = Math.ceil(filteredTickets.length / PAGE_SIZE);
@@ -21,7 +28,7 @@ export function DashboardTicketsTable({ tickets }: DashboardTicketsTableProps) {
   const pageTickets = filteredTickets.slice(start, start + PAGE_SIZE);
 
   if (!filteredTickets.length) {
-    return <p className="text-sm text-muted-foreground text-center py-10">No tickets in the last 30 days</p>;
+    return <p className="text-sm text-muted-foreground text-center py-10">No open, in-progress, or waiting tickets in the last 30 days</p>;
   }
 
   return (
@@ -39,36 +46,33 @@ export function DashboardTicketsTable({ tickets }: DashboardTicketsTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {pageTickets.map((ticket) => {
-            const href = ticket.url ?? `/dashboard/tickets/${ticket.ticket_id}`;
-            const external = !!ticket.url;
-            return (
-              <TableRow key={ticket.ticket_id}>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  <a href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})} className="hover:underline">
-                    #{ticket.ticket_id}
-                  </a>
-                </TableCell>
-                <TableCell className="max-w-xs">
-                  <a
-                    href={href}
-                    {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                    className="hover:underline block truncate"
-                    title={ticket.summary ?? undefined}
-                  >
-                    {(ticket.summary ?? "").length > 100 ? ticket.summary!.slice(0, 100) + "…" : (ticket.summary ?? "—")}
-                  </a>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{ticket.board}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{ticket.contact_name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{ticket.priority}</TableCell>
-                <TableCell>
-                  <TicketStatusBadge status={ticket.status} />
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{new Date(ticket.date_entered).toLocaleDateString()}</TableCell>
-              </TableRow>
-            );
-          })}
+          {pageTickets.map((ticket) => (
+            <TableRow
+              key={ticket.ticket_id}
+              className="cursor-pointer hover:bg-secondary/40"
+              onClick={() => {
+                const record = reportTicketsById.get(ticket.ticket_id);
+                if (!record) {
+                  toast.error("Ticket details are not available for this ticket.");
+                  return;
+                }
+                setSelectedTicket(record);
+                setDialogOpen(true);
+              }}
+            >
+              <TableCell className="font-mono text-xs text-muted-foreground">#{ticket.ticket_id}</TableCell>
+              <TableCell className="max-w-xs truncate" title={ticket.summary ?? undefined}>
+                {(ticket.summary ?? "").length > 100 ? ticket.summary!.slice(0, 100) + "…" : (ticket.summary ?? "—")}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">{ticket.board}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">{ticket.contact_name}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">{ticket.priority}</TableCell>
+              <TableCell>
+                <TicketStatusBadge status={ticket.status} />
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">{new Date(ticket.date_entered).toLocaleDateString()}</TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
 
@@ -90,6 +94,8 @@ export function DashboardTicketsTable({ tickets }: DashboardTicketsTableProps) {
           </div>
         </div>
       )}
+
+      {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel="Last 30 Days" />}
     </div>
   );
 }
