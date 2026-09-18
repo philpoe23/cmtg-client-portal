@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { toast } from "sonner";
 import { getReportPreview } from "@/lib/api/report";
-import { fetchCompanyName } from "../service-summary-report/actions";
+import { fetchCompanyName } from "./service-summary-report/actions";
 import { useTrack } from "@/hooks/use-track";
 import { MonthYearPicker, type MonthYearValue } from "@/components/ui/month-year-picker";
 import { Button } from "@/components/ui/button";

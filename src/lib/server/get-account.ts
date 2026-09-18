@@ -20,7 +20,14 @@ export const getAccountUser = cache(async (): Promise<AccountUser | null> => {
   // Expand the `account` relation to retrieve cw_company_recid from the
   // linked accounts record (portal_users.account → accounts.cw_company_recid).
   // portal_users.account has maxSelect=0, so PocketBase expands it as an array.
-  const portalUser = await pb.collection("portal_users").getOne(model["id"] as string, { expand: "account" });
+  // A stale/broken session (e.g. the record was deleted) surfaces here as a
+  // PocketBase error — treat that the same as "not authenticated" rather
+  // than letting it crash the page.
+  const portalUser = await pb
+    .collection("portal_users")
+    .getOne(model["id"] as string, { expand: "account" })
+    .catch(() => null);
+  if (!portalUser) return null;
 
   const expandData = portalUser.expand as Record<string, unknown> | undefined;
   const accountRaw = expandData?.account;

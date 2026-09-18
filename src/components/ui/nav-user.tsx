@@ -15,7 +15,7 @@ import {
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/auth-context";
 
-function getInitials(name: string, email: string) {
+function getInitials(name: string, email: string): string {
   const source = (name || email || "").trim();
 
   if (!source) {
@@ -46,13 +46,6 @@ export function NavUser({
   const { isMobile } = useSidebar();
   const { signOut } = useAuth();
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.name || user.email || "User";
-  const initials =
-    [user.firstName, user.lastName]
-      .filter(Boolean)
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || (user.email || "U").slice(0, 2).toUpperCase();
 
   return (
     <SidebarMenu>
@@ -61,14 +54,16 @@ export function NavUser({
           <DropdownMenuTrigger
             render={<SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground" />}
           >
-            <Avatar className="h-8 w-8 rounded-lg grayscale">
+            <Avatar className="h-8 w-8 rounded-lg">
               <AvatarImage src={user.avatar} alt={fullName} />
-              <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+              <AvatarFallback className="rounded-lg bg-cmtg-blue-green text-white">
+                {getInitials(user.name || `${user.firstName} ${user.lastName}`, user.email)}
+              </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{fullName}</span>
-              <span className="text-muted-foreground truncate text-xs">{user.email}</span>
-              {user.accountName ? <span className="text-muted-foreground truncate text-[10px] uppercase tracking-wide">{user.accountName}</span> : null}
+              <span className="truncate text-xs text-sidebar-foreground/70">{user.email}</span>
+              {user.accountName ? <span className="truncate text-[10px] tracking-wide text-sidebar-foreground/70 uppercase">{user.accountName}</span> : null}
             </div>
             <IconDotsVertical className="ml-auto size-4" />
           </DropdownMenuTrigger>
@@ -83,7 +78,7 @@ export function NavUser({
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage src={user.avatar} alt={fullName} />
-                    <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                    <AvatarFallback className="rounded-lg">{getInitials(user.name || `${user.firstName} ${user.lastName}`, user.email)}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">{fullName}</span>

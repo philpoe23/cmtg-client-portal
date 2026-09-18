@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/pocketbase/client";
+import { completeAccountSetup, logout } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,9 +40,17 @@ export default function SetupPage() {
         oldPassword: currentPassword,
       });
 
-      // Re-authenticate with the new password so the auth cookie is fresh
+      // Re-authenticate with the new password so we have a fresh, valid token
+      // (changing the password invalidates the old one)
       await pb.collection("portal_users").authWithPassword(pb.authStore.record?.email as string, password);
-      document.cookie = pb.authStore.exportToCookie({ httpOnly: false, sameSite: "Lax" });
+
+      // Mark the account verified and persist the session server-side —
+      // document.cookie can't do that once the cookie is httpOnly.
+      const result = await completeAccountSetup(pb.authStore.token);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to complete setup. Please try again.");
+        return;
+      }
 
       toast.success("Password set! Redirecting…");
       router.push("/dashboard");
@@ -106,10 +115,8 @@ export default function SetupPage() {
                 type="button"
                 variant="ghost"
                 className="w-full"
-                onClick={() => {
-                  const pb = createClient();
-                  pb.authStore.clear();
-                  document.cookie = pb.authStore.exportToCookie({ httpOnly: false, sameSite: "Lax", expires: new Date(0) });
+                onClick={async () => {
+                  await logout();
                   router.push("/login");
                 }}
               >

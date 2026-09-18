@@ -1,26 +1,53 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { CompanyTicket, TicketRecord } from "@/types";
-import { TicketStatusBadge } from "@/components/portal/ticket-status-badge";
-import { TicketDetailDialog } from "@/components/portal/report-tickets-table";
+import { useLazyReportTickets } from "@/hooks/use-lazy-report-tickets";
+import { CmtgStatusBadge } from "@/components/cmtg/cmtg-status-badge";
+import { CmtgButton } from "@/components/cmtg/cmtg-button";
+import { mapTicketStatus } from "@/components/cmtg/cmtg-ticket-mapping";
+import { TicketDetailDialog, PriorityChip, formatDate } from "@/components/portal/report-tickets-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 
 const PAGE_SIZE = 25;
 
 interface DashboardTicketsTableProps {
   tickets: CompanyTicket[];
-  reportTickets: TicketRecord[];
+  startDate: string;
+  endDate: string;
 }
 
-export function DashboardTicketsTable({ tickets, reportTickets }: DashboardTicketsTableProps) {
+export function DashboardTicketsTable({ tickets, startDate, endDate }: DashboardTicketsTableProps) {
   const [page, setPage] = useState(1);
   const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [pendingTicketId, setPendingTicketId] = useState<number | null>(null);
+  const { tickets: reportTickets, ensureLoaded } = useLazyReportTickets(startDate, endDate);
 
-  const reportTicketsById = useMemo(() => new Map(reportTickets.map((t) => [t["Ticket #"], t])), [reportTickets]);
+  // Kick off the (slow) report fetch in the background as soon as the table
+  // mounts, instead of waiting for a row click — mirrors the Service Summary
+  // Report page, where all this data is already loaded by the time you can
+  // click a row, so opening the dialog is instant.
+  useEffect(() => {
+    ensureLoaded();
+  }, [ensureLoaded]);
+
+  async function handleRowClick(ticket: CompanyTicket) {
+    if (reportTickets === null) setPendingTicketId(ticket.ticket_id);
+    try {
+      const records = await ensureLoaded();
+      const record = records.find((r) => r["Ticket #"] === ticket.ticket_id);
+      if (!record) {
+        toast.error("Ticket details are not available for this ticket.");
+        return;
+      }
+      setSelectedTicket(record);
+      setDialogOpen(true);
+    } finally {
+      setPendingTicketId(null);
+    }
+  }
 
   const filteredTickets = tickets.filter((t) => t.contact_name);
   const totalPages = Math.ceil(filteredTickets.length / PAGE_SIZE);
@@ -49,16 +76,9 @@ export function DashboardTicketsTable({ tickets, reportTickets }: DashboardTicke
           {pageTickets.map((ticket) => (
             <TableRow
               key={ticket.ticket_id}
-              className="cursor-pointer hover:bg-secondary/40"
-              onClick={() => {
-                const record = reportTicketsById.get(ticket.ticket_id);
-                if (!record) {
-                  toast.error("Ticket details are not available for this ticket.");
-                  return;
-                }
-                setSelectedTicket(record);
-                setDialogOpen(true);
-              }}
+              className="cursor-pointer hover:bg-secondary/40 aria-busy:opacity-60"
+              aria-busy={pendingTicketId === ticket.ticket_id}
+              onClick={() => handleRowClick(ticket)}
             >
               <TableCell className="font-mono text-xs text-muted-foreground">#{ticket.ticket_id}</TableCell>
               <TableCell className="max-w-xs truncate" title={ticket.summary ?? undefined}>
@@ -66,11 +86,13 @@ export function DashboardTicketsTable({ tickets, reportTickets }: DashboardTicke
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">{ticket.board}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{ticket.contact_name}</TableCell>
-              <TableCell className="text-sm text-muted-foreground">{ticket.priority}</TableCell>
               <TableCell>
-                <TicketStatusBadge status={ticket.status} />
+                <PriorityChip value={ticket.priority} />
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">{new Date(ticket.date_entered).toLocaleDateString()}</TableCell>
+              <TableCell>
+                <CmtgStatusBadge status={mapTicketStatus(ticket.status)} label={ticket.status} size="sm" />
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">{formatDate(ticket.date_entered)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -82,15 +104,15 @@ export function DashboardTicketsTable({ tickets, reportTickets }: DashboardTicke
             Showing {start + 1}–{Math.min(start + PAGE_SIZE, filteredTickets.length)} of {filteredTickets.length} tickets
           </p>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+            <CmtgButton type="button" variant="secondary" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
               Previous
-            </Button>
+            </CmtgButton>
             <span className="text-xs text-muted-foreground">
               {page} / {totalPages}
             </span>
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+            <CmtgButton type="button" variant="secondary" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
               Next
-            </Button>
+            </CmtgButton>
           </div>
         </div>
       )}

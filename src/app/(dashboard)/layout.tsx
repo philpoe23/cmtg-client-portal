@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { usePathname } from "next/navigation";
@@ -57,16 +58,12 @@ export default function RootLayout({
               {crumbs.map((crumb, i) => {
                 const isLast = i === crumbs.length - 1;
                 return (
-                  <BreadcrumbItem key={crumb.href}>
-                    {!isLast ? (
-                      <>
-                        <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>
-                        <BreadcrumbSeparator />
-                      </>
-                    ) : (
-                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                    )}
-                  </BreadcrumbItem>
+                  <Fragment key={crumb.href}>
+                    <BreadcrumbItem>
+                      {isLast ? <BreadcrumbPage>{crumb.label}</BreadcrumbPage> : <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>}
+                    </BreadcrumbItem>
+                    {!isLast && <BreadcrumbSeparator />}
+                  </Fragment>
                 );
               })}
             </BreadcrumbList>

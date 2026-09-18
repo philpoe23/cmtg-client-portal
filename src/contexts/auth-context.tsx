@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/pocketbase/client";
+import { getCurrentUser, signOutServer } from "@/lib/server/auth";
 
 export interface User {
   id: string;
@@ -31,42 +32,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const hydrateUser = async () => {
-      const pb = createClient();
-      pb.authStore.loadFromCookie(document.cookie);
+      // The auth cookie is httpOnly, so it can't be read from document.cookie
+      // here — ask the server (which does see it) who's signed in instead.
+      const currentUser = await getCurrentUser().catch(() => null);
 
-      if (pb.authStore.isValid && pb.authStore.model) {
-        try {
-          const model = pb.authStore.model;
-          const portalUser = await pb.collection("portal_users").getOne(model["id"] as string, { expand: "account" });
-          const expandData = portalUser.expand as Record<string, unknown> | undefined;
-          const accountRaw = expandData?.account;
-          const account = (Array.isArray(accountRaw) ? accountRaw[0] : accountRaw) as Record<string, unknown> | undefined;
-          const firstName = (portalUser["first_name"] as string | undefined) || "";
-          const lastName = (portalUser["last_name"] as string | undefined) || "";
-          const displayName = [firstName, lastName].filter(Boolean).join(" ") || (portalUser["email"] as string) || "User";
-
-          setUser({
-            id: portalUser["id"] as string,
-            first_name: firstName,
-            last_name: lastName,
-            name: displayName,
-            email: (portalUser["email"] as string) || "",
-            accountName: ((account?.["company_name"] as string | undefined) || "") as string,
-          });
-          setIsAuthenticated(true);
-        } catch {
-          const model = pb.authStore.model;
-          const fallbackName = (model["name"] as string | undefined) || (model["email"] as string) || "User";
-          setUser({
-            id: model["id"] as string,
-            first_name: (model["first_name"] as string | undefined) || "",
-            last_name: (model["last_name"] as string | undefined) || "",
-            name: fallbackName,
-            email: (model["email"] as string) || "",
-            accountName: "",
-          });
-          setIsAuthenticated(true);
-        }
+      if (currentUser) {
+        setUser(currentUser);
+        setIsAuthenticated(true);
       } else {
         setUser(null);
         setIsAuthenticated(false);
@@ -85,12 +57,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = () => {
     const pb = createClient();
     pb.authStore.clear();
-    // Expire the auth cookie
-    document.cookie = pb.authStore.exportToCookie({ httpOnly: false, sameSite: "Lax", expires: new Date(0) });
     setUser(null);
     setIsAuthenticated(false);
-    router.push("/login");
-    router.refresh();
+    signOutServer().finally(() => {
+      router.push("/login");
+      router.refresh();
+    });
   };
 
   return <AuthContext.Provider value={{ user, isAuthenticated, isLoading, signIn, signOut }}>{children}</AuthContext.Provider>;

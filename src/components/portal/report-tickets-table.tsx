@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { ChevronUp, ChevronDown, ChevronsUpDown, MapPin, Search, SlidersHorizontal, Check } from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronsUpDown, Download, MapPin, Search, SlidersHorizontal, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TicketRecord } from "@/types";
 
@@ -202,7 +202,7 @@ function StatusChip({ closed }: { closed: boolean }) {
   );
 }
 
-function PriorityChip({ value }: { value: string }) {
+export function PriorityChip({ value }: { value: string }) {
   const cls =
     value === "Critical"
       ? "border-red-300 bg-red-100 text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400"
@@ -327,7 +327,7 @@ function HoursSummaryBar({ tickets }: { tickets: TicketRecord[] }) {
   );
 }
 
-function formatDate(dateStr: string | null | undefined): string {
+export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
   try {
     return new Date(dateStr).toLocaleDateString("en-AU", {
@@ -338,6 +338,46 @@ function formatDate(dateStr: string | null | undefined): string {
   } catch {
     return dateStr;
   }
+}
+
+// ─── CSV export ────────────────────────────────────────────────────────────
+
+function csvCell(value: string | number): string {
+  const str = String(value ?? "");
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+const CSV_COLUMNS: Array<{ header: string; getValue: (t: TicketRecord) => string | number }> = [
+  { header: "Ticket #", getValue: (t) => t["Ticket #"] },
+  { header: "Created Date", getValue: (t) => formatDate(t["Created Date"]) },
+  { header: "Resolved Date", getValue: (t) => formatDate(t["Resolved Date"]) },
+  { header: "Contact", getValue: (t) => t["Primary Contact"] },
+  { header: "Site", getValue: (t) => t.Site },
+  { header: "Board", getValue: (t) => t.Board },
+  { header: "Type", getValue: (t) => t["Ticket Type"] },
+  { header: "Sub Type", getValue: (t) => t["Sub Type"] },
+  { header: "Priority", getValue: (t) => t["SLA Priority"] },
+  { header: "SLA Attainment", getValue: (t) => t["SLA Attainment"] },
+  { header: "Techs Worked", getValue: (t) => t["Techs Worked"] },
+  { header: "SSA Hours", getValue: (t) => (t["SSA Hours"] ?? 0).toFixed(2) },
+  { header: "MSA Hours", getValue: (t) => (t["MSA Hours"] ?? 0).toFixed(2) },
+  { header: "Dedicated Hours", getValue: (t) => (t["Dedicated Resource Hours"] ?? 0).toFixed(2) },
+  { header: "No Agreement Hours", getValue: (t) => (t["No Agreement Hours"] ?? 0).toFixed(2) },
+  { header: "Written Off Hours", getValue: (t) => (t["Written Off / Non-Billable Hours"] ?? 0).toFixed(2) },
+  { header: "Total Hours", getValue: (t) => Number(t.hours_summary?.total_hours ?? t["Total Hours"] ?? 0).toFixed(2) },
+  { header: "Summary", getValue: (t) => t.Summary },
+];
+
+function exportTicketsToCsv(tickets: TicketRecord[], filename: string) {
+  const rows = [CSV_COLUMNS.map((c) => csvCell(c.header)), ...tickets.map((t) => CSV_COLUMNS.map((c) => csvCell(c.getValue(t))))];
+  const csv = rows.map((row) => row.join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─── Sortable header ─────────────────────────────────────────────────────────
@@ -391,23 +431,12 @@ function TextBlock({ label, text }: { label: string; text: string }) {
   );
 }
 
-// ─── Ticket detail dialog ────────────────────────────────────────────────────
+// ─── Ticket detail content (shared by the dialog and any inline panel) ───────
 
-export function TicketDetailDialog({ ticket, open, onClose, periodLabel }: { ticket: TicketRecord; open: boolean; onClose: () => void; periodLabel: string }) {
+export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRecord; periodLabel: string }) {
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
-    >
-      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Ticket #{ticket["Ticket #"]}</DialogTitle>
-          <DialogDescription className="sr-only">{ticket.Summary || "Ticket detail"}</DialogDescription>
-        </DialogHeader>
-
-        {/* Chips row — always visible */}
+    <div className="grid gap-6">
+      {/* Chips row — always visible */}
         <div className="flex flex-wrap gap-2">
           <StatusChip closed={ticket.Closed_Flag === 1} />
           <PriorityChip value={ticket["SLA Priority"]} />
@@ -610,6 +639,26 @@ export function TicketDetailDialog({ ticket, open, onClose, periodLabel }: { tic
             )}
           </TabsContent>
         </Tabs>
+    </div>
+  );
+}
+
+// ─── Ticket detail dialog ────────────────────────────────────────────────────
+
+export function TicketDetailDialog({ ticket, open, onClose, periodLabel }: { ticket: TicketRecord; open: boolean; onClose: () => void; periodLabel: string }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+    >
+      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Ticket #{ticket["Ticket #"]}</DialogTitle>
+          <DialogDescription className="sr-only">{ticket.Summary || "Ticket detail"}</DialogDescription>
+        </DialogHeader>
+        <TicketDetailContent ticket={ticket} periodLabel={periodLabel} />
       </DialogContent>
     </Dialog>
   );
@@ -855,6 +904,11 @@ export default function ReportTicketsTable({ tickets, periodLabel }: ReportTicke
 
   const visibleCols = TABLE_COLUMNS.filter((c) => visibleColumns.has(c.key));
 
+  function handleExportCsv() {
+    const safePeriod = periodLabel.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    exportTicketsToCsv(sorted, `service-summary-report-${safePeriod || "export"}.csv`);
+  }
+
   return (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
       <Card className="gap-0 overflow-hidden py-0">
@@ -881,7 +935,13 @@ export default function ReportTicketsTable({ tickets, periodLabel }: ReportTicke
             />
           </div>
 
-          <ColumnsToggle visible={visibleColumns} onChange={setVisibleColumns} />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={handleExportCsv} disabled={sorted.length === 0}>
+              <Download className="h-3.5 w-3.5" />
+              <span className="text-xs">Export CSV</span>
+            </Button>
+            <ColumnsToggle visible={visibleColumns} onChange={setVisibleColumns} />
+          </div>
         </div>
 
         {/* Hours summary */}

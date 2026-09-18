@@ -1,39 +1,23 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  SidebarFooter,
-} from "@/components/ui/sidebar";
-import { GalleryVerticalEndIcon } from "lucide-react";
+import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter } from "@/components/ui/sidebar";
 import { NavUser } from "@/components/ui/nav-user";
 import { useAuth } from "@/contexts/auth-context";
 
-// This is sample data.
-const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-    },
-    {
-      title: "Service Summary Report",
-      url: "/service-summary-report",
-    },
-  ],
-};
+// Assets/Reports/Billing/Settings from the CMTG mockup nav aren't implemented
+// as real pages yet — only link to routes that exist.
+const NAV_ITEMS = [
+  // { title: "Dashboard", url: "/dashboard" },
+  // { title: "Tickets", url: "/dashboard/tickets" },
+  { title: "Service Summary Report", url: "/" },
+];
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth();
+  const pathname = usePathname();
 
   const userData = {
     firstName: user?.first_name || "",
@@ -49,36 +33,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex items-center gap-2">
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-white text-white-foreground">
-                <img src="/images/logo.png" alt="Logo" className="size-4" />
-              </div>
-              <div className="flex flex-col gap-0.5 leading-none">
-                <span className="font-small">Client Portal</span>
-              </div>
+            <div className="flex items-center gap-2.5 px-1 py-1">
+              <img src="/images/logo.svg" alt="CMTG Logo" className="h-32 w-56" />
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarMenu className="gap-2">
-            {data.navMain.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton render={<a href={item.url} className="font-medium" />}>{item.title}</SidebarMenuButton>
-                {/* {item.items?.length ? (
-                  <SidebarMenuSub className="ml-0 border-l-0 px-1.5">
-                    {item.items.map((item) => (
-                      <SidebarMenuSubItem key={item.title}>
-                        <SidebarMenuSubButton isActive={item.isActive} render={<a href={item.url} />}>
-                          {item.title}
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    ))}
-                  </SidebarMenuSub>
-                ) : null} */}
-              </SidebarMenuItem>
-            ))}
+          <SidebarMenu className="gap-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive = item.url === "/dashboard" ? pathname === item.url : pathname.startsWith(item.url);
+              return (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton isActive={isActive} render={<a href={item.url} className="font-medium" />}>
+                    {item.title}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>

@@ -18,6 +18,7 @@ export async function proxy(request: NextRequest) {
 
   const isPortal = pathname.startsWith("/portal");
   const isSetupPage = pathname === "/login/setup";
+  const isMfaSetupPage = pathname === "/login/mfa-setup";
   const isLoginArea = pathname.startsWith("/login");
 
   // ── Unauthenticated ────────────────────────────────────────────────────────
@@ -44,6 +45,17 @@ export async function proxy(request: NextRequest) {
     if (!isSetupPage) {
       const url = request.nextUrl.clone();
       url.pathname = "/login/setup";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next({ request });
+  }
+
+  // Two-factor authentication is mandatory: verified but not yet enrolled
+  const hasTotpEnabled = pb.authStore.model?.totp_enabled ?? false;
+  if (!hasTotpEnabled) {
+    if (!isMfaSetupPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login/mfa-setup";
       return NextResponse.redirect(url);
     }
     return NextResponse.next({ request });
