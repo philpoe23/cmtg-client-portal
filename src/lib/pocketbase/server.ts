@@ -1,5 +1,15 @@
 import PocketBase from "pocketbase";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+
+/**
+ * Browsers silently drop `Secure` cookies on non-HTTPS origins (localhost
+ * excepted), so a hardcoded `secure: true` makes auth impossible on a plain
+ * HTTP deployment. Follow the protocol the request actually arrived on.
+ */
+async function isSecureRequest(): Promise<boolean> {
+  const headerStore = await headers();
+  return (headerStore.get("x-forwarded-proto") ?? "http").split(",")[0].trim() === "https";
+}
 
 export async function createClient() {
   const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL!);
@@ -22,12 +32,13 @@ export async function createClient() {
  */
 export async function persistAuthCookie(pb: PocketBase) {
   const cookieStore = await cookies();
-  const exported = pb.authStore.exportToCookie({ httpOnly: true, secure: true, sameSite: "Lax" });
+  const secure = await isSecureRequest();
+  const exported = pb.authStore.exportToCookie({ httpOnly: true, secure, sameSite: "Lax" });
   const [nameValue] = exported.split("; ");
   const eq = nameValue.indexOf("=");
   cookieStore.set(nameValue.slice(0, eq), decodeURIComponent(nameValue.slice(eq + 1)), {
     httpOnly: true,
-    secure: true,
+    secure,
     sameSite: "lax",
     path: "/",
   });

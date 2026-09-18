@@ -16,24 +16,27 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  const isPortal = pathname.startsWith("/portal");
   const isSetupPage = pathname === "/login/setup";
   const isMfaSetupPage = pathname === "/login/mfa-setup";
   const isLoginArea = pathname.startsWith("/login");
 
   // ── Unauthenticated ────────────────────────────────────────────────────────
+  // Deny by default: anything that isn't the login flow itself requires a
+  // session. Listing protected paths instead left every new route (/dashboard
+  // included) publicly reachable until someone remembered to add it here.
   if (!pb.authStore.isValid) {
-    if (isPortal || pathname === "/") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
+    // Route handlers answer with their own status codes; a redirect would turn
+    // an honest 401 into a 200 page of HTML.
+    if (pathname.startsWith("/api")) {
+      return NextResponse.next({ request });
     }
-    if (isSetupPage) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      return NextResponse.redirect(url);
+    // The setup and MFA pages presuppose a session, so they are not entry points.
+    if (isLoginArea && !isSetupPage && !isMfaSetupPage) {
+      return NextResponse.next({ request });
     }
-    return NextResponse.next({ request });
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
   }
 
   // ── Authenticated ──────────────────────────────────────────────────────────
@@ -69,8 +72,11 @@ export async function proxy(request: NextRequest) {
   }
 
   const response = NextResponse.next({ request });
-  // Propagate any auth cookie updates
-  response.headers.append("Set-Cookie", pb.authStore.exportToCookie({ httpOnly: true, secure: true, sameSite: "Lax" }));
+  // Propagate any auth cookie updates. `secure` follows the request's actual
+  // protocol — browsers drop Secure cookies on plain-HTTP origins, which would
+  // otherwise sign the user out on every request behind a non-TLS proxy.
+  const isHttps = (request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "")).split(",")[0].trim() === "https";
+  response.headers.append("Set-Cookie", pb.authStore.exportToCookie({ httpOnly: true, secure: isHttps, sameSite: "Lax" }));
   return response;
 }
 
