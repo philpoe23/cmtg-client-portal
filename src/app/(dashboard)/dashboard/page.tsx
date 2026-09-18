@@ -94,6 +94,7 @@ export default function ServiceSummaryReportPage() {
         <ReportTicketsTable
           tickets={tickets}
           total={totalTickets}
+          companyName={companyName}
           periodLabel={selectedMonth ? format(new Date(selectedMonth.year, selectedMonth.month - 1, 1), "MMMM yyyy") : ""}
         />
       )}

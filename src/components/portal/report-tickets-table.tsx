@@ -16,7 +16,9 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { ChevronUp, ChevronDown, ChevronsUpDown, Download, MapPin, Search, SlidersHorizontal, Check } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { downloadXlsx, type XlsxColumnType } from "@/lib/api/xlsx";
 import type { TicketRecord } from "@/types";
 
 type SortKey = keyof TicketRecord;
@@ -340,44 +342,16 @@ export function formatDate(dateStr: string | null | undefined): string {
   }
 }
 
-// ─── CSV export ────────────────────────────────────────────────────────────
+// ─── Excel export ──────────────────────────────────────────────────────────
 
-function csvCell(value: string | number): string {
-  const str = String(value ?? "");
-  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-}
-
-const CSV_COLUMNS: Array<{ header: string; getValue: (t: TicketRecord) => string | number }> = [
-  { header: "Ticket #", getValue: (t) => t["Ticket #"] },
-  { header: "Created Date", getValue: (t) => formatDate(t["Created Date"]) },
-  { header: "Resolved Date", getValue: (t) => formatDate(t["Resolved Date"]) },
-  { header: "Contact", getValue: (t) => t["Primary Contact"] },
-  { header: "Site", getValue: (t) => t.Site },
-  { header: "Board", getValue: (t) => t.Board },
-  { header: "Type", getValue: (t) => t["Ticket Type"] },
-  { header: "Sub Type", getValue: (t) => t["Sub Type"] },
-  { header: "Priority", getValue: (t) => t["SLA Priority"] },
-  { header: "SLA Attainment", getValue: (t) => t["SLA Attainment"] },
-  { header: "Techs Worked", getValue: (t) => t["Techs Worked"] },
-  { header: "SSA Hours", getValue: (t) => (t["SSA Hours"] ?? 0).toFixed(2) },
-  { header: "MSA Hours", getValue: (t) => (t["MSA Hours"] ?? 0).toFixed(2) },
-  { header: "Dedicated Hours", getValue: (t) => (t["Dedicated Resource Hours"] ?? 0).toFixed(2) },
-  { header: "No Agreement Hours", getValue: (t) => (t["No Agreement Hours"] ?? 0).toFixed(2) },
-  { header: "Written Off Hours", getValue: (t) => (t["Written Off / Non-Billable Hours"] ?? 0).toFixed(2) },
-  { header: "Total Hours", getValue: (t) => Number(t.hours_summary?.total_hours ?? t["Total Hours"] ?? 0).toFixed(2) },
-  { header: "Summary", getValue: (t) => t.Summary },
-];
-
-function exportTicketsToCsv(tickets: TicketRecord[], filename: string) {
-  const rows = [CSV_COLUMNS.map((c) => csvCell(c.header)), ...tickets.map((t) => CSV_COLUMNS.map((c) => csvCell(c.getValue(t))))];
-  const csv = rows.map((row) => row.join(",")).join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+/** The generator expects plain `YYYY-MM-DD`; avoid UTC conversion shifting the day. */
+function toIsoDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+  if (iso) return iso[1];
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // ─── Sortable header ─────────────────────────────────────────────────────────
@@ -674,6 +648,12 @@ interface TableColDef {
   cellClass?: string;
   alwaysVisible?: boolean;
   renderCell: (ticket: TicketRecord) => ReactNode;
+  /** Export metadata — kept beside renderCell so the workbook can't drift from the table. */
+  exportType: XlsxColumnType;
+  exportValue: (ticket: TicketRecord) => string | number | null;
+  exportWidth?: number;
+  exportAlign?: "left" | "center" | "right";
+  exportTotal?: boolean;
 }
 
 const TABLE_COLUMNS: TableColDef[] = [
@@ -684,6 +664,10 @@ const TABLE_COLUMNS: TableColDef[] = [
     headerClass: "w-20",
     alwaysVisible: true,
     renderCell: (t) => <span className="font-mono text-xs text-muted-foreground">{t["Ticket #"]}</span>,
+    exportType: "number",
+    exportValue: (t) => t["Ticket #"],
+    exportWidth: 12,
+    exportAlign: "center",
   },
   {
     key: "created",
@@ -691,6 +675,8 @@ const TABLE_COLUMNS: TableColDef[] = [
     sortKey: "Created Date",
     headerClass: "w-28",
     renderCell: (t) => <span className="text-xs">{formatDate(t["Created Date"])}</span>,
+    exportType: "date",
+    exportValue: (t) => toIsoDate(t["Created Date"]),
   },
   {
     key: "contact",
@@ -698,6 +684,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     sortKey: "Primary Contact",
     headerClass: "w-36",
     renderCell: (t) => <span className="text-xs">{t["Primary Contact"]}</span>,
+    exportType: "text",
+    exportValue: (t) => t["Primary Contact"],
+    exportWidth: 24,
   },
   {
     key: "board",
@@ -705,6 +694,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     sortKey: "Board",
     headerClass: "w-32",
     renderCell: (t) => <span className="text-xs">{t.Board}</span>,
+    exportType: "text",
+    exportValue: (t) => t.Board,
+    exportWidth: 20,
   },
   {
     key: "type",
@@ -712,6 +704,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     sortKey: "Ticket Type",
     headerClass: "w-24",
     renderCell: (t) => <span className="text-xs text-muted-foreground">{t["Ticket Type"] || "—"}</span>,
+    exportType: "text",
+    exportValue: (t) => t["Ticket Type"],
+    exportWidth: 18,
   },
   {
     key: "sla",
@@ -719,12 +714,19 @@ const TABLE_COLUMNS: TableColDef[] = [
     sortKey: "SLA Attainment",
     headerClass: "w-24",
     renderCell: (t) => <SlaAttainmentBadge value={t["SLA Attainment"]} />,
+    exportType: "text",
+    exportValue: (t) => t["SLA Attainment"],
+    exportWidth: 14,
   },
   {
     key: "slaStatus",
     label: "SLA Status",
     headerClass: "w-20",
     renderCell: (t) => <SlaStatusChip ticket={t} />,
+    exportType: "text",
+    exportValue: (t) => `${getSlaMetCount(t)} met`,
+    exportWidth: 12,
+    exportAlign: "center",
   },
   {
     key: "techs",
@@ -732,6 +734,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     sortKey: "Techs Worked",
     headerClass: "w-40",
     renderCell: (t) => <span className="text-xs">{t["Techs Worked"] || "—"}</span>,
+    exportType: "text",
+    exportValue: (t) => t["Techs Worked"],
+    exportWidth: 32,
   },
   {
     key: "ssa",
@@ -740,6 +745,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     headerClass: "w-16 text-right",
     cellClass: "text-right",
     renderCell: (t) => <span className="text-xs">{(t["SSA Hours"] ?? 0) > 0 ? t["SSA Hours"]!.toFixed(2) : "—"}</span>,
+    exportType: "hours",
+    exportValue: (t) => t["SSA Hours"] ?? 0,
+    exportTotal: true,
   },
   {
     key: "msa",
@@ -748,6 +756,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     headerClass: "w-16 text-right",
     cellClass: "text-right",
     renderCell: (t) => <span className="text-xs">{(t["MSA Hours"] ?? 0) > 0 ? t["MSA Hours"]!.toFixed(2) : "—"}</span>,
+    exportType: "hours",
+    exportValue: (t) => t["MSA Hours"] ?? 0,
+    exportTotal: true,
   },
   {
     key: "dedicated",
@@ -756,6 +767,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     headerClass: "w-20 text-right",
     cellClass: "text-right",
     renderCell: (t) => <span className="text-xs">{(t["Dedicated Resource Hours"] ?? 0) > 0 ? t["Dedicated Resource Hours"]!.toFixed(2) : "—"}</span>,
+    exportType: "hours",
+    exportValue: (t) => t["Dedicated Resource Hours"] ?? 0,
+    exportTotal: true,
   },
   {
     key: "agreement",
@@ -763,6 +777,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     sortKey: "Agreements Used",
     headerClass: "w-40",
     renderCell: (t) => <span className="text-xs">{t["Agreements Used"] || "—"}</span>,
+    exportType: "text",
+    exportValue: (t) => t["Agreements Used"],
+    exportWidth: 32,
   },
   {
     key: "wo",
@@ -774,6 +791,9 @@ const TABLE_COLUMNS: TableColDef[] = [
       const v = t["Written Off / Non-Billable Hours"] ?? 0;
       return <span className="text-xs">{v > 0 ? v.toFixed(2) : "—"}</span>;
     },
+    exportType: "hours",
+    exportValue: (t) => t["Written Off / Non-Billable Hours"] ?? 0,
+    exportTotal: true,
   },
   {
     key: "total",
@@ -783,6 +803,9 @@ const TABLE_COLUMNS: TableColDef[] = [
     cellClass: "text-right",
     alwaysVisible: true,
     renderCell: (t) => <span className="text-xs font-medium">{Number(t.hours_summary?.total_hours ?? t["Total Hours"] ?? 0).toFixed(2)}</span>,
+    exportType: "hours",
+    exportValue: (t) => Number(t.hours_summary?.total_hours ?? t["Total Hours"] ?? 0),
+    exportTotal: true,
   },
 ];
 
@@ -837,9 +860,10 @@ interface ReportTicketsTableProps {
   tickets: TicketRecord[];
   total: number;
   periodLabel: string;
+  companyName?: string | null;
 }
 
-export default function ReportTicketsTable({ tickets, periodLabel }: ReportTicketsTableProps) {
+export default function ReportTicketsTable({ tickets, periodLabel, companyName }: ReportTicketsTableProps) {
   const [activeTab, setActiveTab] = useState<"all" | "open" | "closed">("all");
   const [sortKey, setSortKey] = useState<SortKey>("Ticket #");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -849,6 +873,7 @@ export default function ReportTicketsTable({ tickets, periodLabel }: ReportTicke
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(TABLE_COLUMNS.map((c) => c.key)));
   const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const openTickets = useMemo(() => tickets.filter((t) => t.Closed_Flag === 0), [tickets]);
   const closedTickets = useMemo(() => tickets.filter((t) => t.Closed_Flag === 1), [tickets]);
@@ -904,9 +929,33 @@ export default function ReportTicketsTable({ tickets, periodLabel }: ReportTicke
 
   const visibleCols = TABLE_COLUMNS.filter((c) => visibleColumns.has(c.key));
 
-  function handleExportCsv() {
+  async function handleExport() {
     const safePeriod = periodLabel.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    exportTicketsToCsv(sorted, `service-summary-report-${safePeriod || "export"}.csv`);
+    const safeCompany = (companyName ?? "").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    const tabLabel = activeTab === "open" ? "Open & In Progress" : activeTab === "closed" ? "Closed" : null;
+
+    setExporting(true);
+    try {
+      await downloadXlsx({
+        title: "Service Tickets",
+        subtitle: [companyName, periodLabel, tabLabel].filter(Boolean).join(" — "),
+        sheet_name: "Tickets",
+        filename: [safeCompany, "service-tickets", safePeriod].filter(Boolean).join("-") || "service-tickets",
+        columns: visibleCols.map((c) => ({
+          key: c.key,
+          label: c.label,
+          type: c.exportType,
+          ...(c.exportWidth ? { width: c.exportWidth } : {}),
+          ...(c.exportAlign ? { align: c.exportAlign } : {}),
+          ...(c.exportTotal ? { total: true } : {}),
+        })),
+        rows: sorted.map((t) => Object.fromEntries(visibleCols.map((c) => [c.key, c.exportValue(t)]))),
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -936,9 +985,9 @@ export default function ReportTicketsTable({ tickets, periodLabel }: ReportTicke
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={handleExportCsv} disabled={sorted.length === 0}>
+            <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={handleExport} disabled={sorted.length === 0 || exporting}>
               <Download className="h-3.5 w-3.5" />
-              <span className="text-xs">Export CSV</span>
+              <span className="text-xs">{exporting ? "Exporting…" : "Export Excel"}</span>
             </Button>
             <ColumnsToggle visible={visibleColumns} onChange={setVisibleColumns} />
           </div>

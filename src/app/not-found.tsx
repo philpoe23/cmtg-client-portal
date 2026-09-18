@@ -9,8 +9,8 @@ export default function NotFoundPage() {
         <p className="text-lg font-medium">Page not found</p>
         <p className="text-sm text-muted-foreground max-w-sm">The page you&apos;re looking for doesn&apos;t exist or has been moved.</p>
       </div>
-      <Button asChild variant="outline">
-        <Link href="/dashboard">Go to dashboard</Link>
+      <Button render={<Link href="/dashboard" />} variant="outline">
+        Go to dashboard
       </Button>
     </div>
   );
