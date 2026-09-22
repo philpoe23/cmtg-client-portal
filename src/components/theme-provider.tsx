@@ -1,30 +1,18 @@
 "use client";
 
 import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
-import { useState, useEffect } from "react";
 
 /**
- * Wrapper around next-themes ThemeProvider that defers rendering until after
- * hydration. This prevents next-themes from rendering its inline <script>
- * element in React's client component tree, which causes a React 19 warning.
- * FOUC prevention is handled separately by /theme-init.js via beforeInteractive.
+ * Wrapper around next-themes ThemeProvider.
+ *
+ * Do not gate this behind a `mounted` flag. next-themes always renders an
+ * inline <script> that applies the stored theme before paint. Deferring the
+ * provider to after hydration keeps that script out of the SSR HTML, so React
+ * has to create the <script> node during a client render -- which both emits
+ * "Encountered a script tag while rendering React component" and silently
+ * drops the script (client-created scripts never execute). Rendering on the
+ * server means the script ships in the HTML, runs, and hydrates cleanly.
  */
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
-  // nonce="" prevents next-themes from injecting its own inline script;
-  // FOUC prevention is handled by /theme-init.js loaded via beforeInteractive.
-  return (
-    <NextThemesProvider nonce="" {...props}>
-      {children}
-    </NextThemesProvider>
-  );
+  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
 }

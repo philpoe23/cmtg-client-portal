@@ -71,7 +71,11 @@ export function OtpInput({ length = 6, value, onChange, disabled, className }: O
           onChange={(e) => handleChange(i, e)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={(e) => handlePaste(i, e)}
-          className="h-14 w-12 rounded-xl border border-border bg-muted/50 text-center text-xl font-bold text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50 sm:h-16 sm:w-14 sm:text-2xl"
+          // Flexible rather than fixed-width: a definite width makes each box's
+          // flex minimum size that width, so six of them plus gaps overflow a
+          // max-w-sm card and get clipped flush to its edges. min-w-0 lifts
+          // that floor, and the cap keeps them from stretching on wide cards.
+          className="h-14 min-w-0 flex-1 max-w-14 rounded-xl border border-border bg-muted/50 text-center text-xl font-bold text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50 sm:h-16 sm:text-2xl"
         />
       ))}
     </div>
