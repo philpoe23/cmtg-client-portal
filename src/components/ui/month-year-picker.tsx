@@ -43,9 +43,14 @@ export function MonthYearPicker({ value, onChange }: MonthYearPickerProps) {
 
   const isFuture = (m: number, y?: number) => y === currentYear && m > currentMonth;
 
+  // TEMP DEBUG -- remove once the Run Report issue is diagnosed.
+  console.log("[picker] render", { value, pending, month, year, hasOnChange: typeof onChange });
+
   function commit(next: { month?: number; year?: number }) {
+    console.log("[picker] commit", next, "-> complete?", next.month != null && next.year != null);
     if (next.month != null && next.year != null) {
       setPending(null);
+      console.log("[picker] calling onChange with", { month: next.month, year: next.year });
       onChange?.({ month: next.month, year: next.year });
       return;
     }
@@ -53,11 +58,13 @@ export function MonthYearPicker({ value, onChange }: MonthYearPickerProps) {
   }
 
   function handleMonth(v: string | null) {
+    console.log("[picker] handleMonth raw value:", JSON.stringify(v), "typeof", typeof v);
     if (!v) return;
     commit({ month: Number(v), year });
   }
 
   function handleYear(v: string | null) {
+    console.log("[picker] handleYear raw value:", JSON.stringify(v), "typeof", typeof v);
     if (!v) return;
     const nextYear = Number(v);
     // Moving to the current year can strand a month that is now in the future
@@ -69,7 +76,10 @@ export function MonthYearPicker({ value, onChange }: MonthYearPickerProps) {
 
   return (
     <div className="flex items-center gap-2">
-      <Select value={month != null ? String(month) : undefined} onValueChange={handleMonth}>
+      {/* `null`, never `undefined`: Base UI latches controlled-ness on the first
+          render via `controlled !== undefined`, so an undefined value here would
+          start the select uncontrolled and warn as soon as one is picked. */}
+      <Select value={month != null ? String(month) : null} onValueChange={handleMonth}>
         <SelectTrigger className="w-40">
           {month != null ? <span>{monthLabel(month)}</span> : <span className="text-muted-foreground">Month</span>}
         </SelectTrigger>
@@ -82,7 +92,7 @@ export function MonthYearPicker({ value, onChange }: MonthYearPickerProps) {
         </SelectContent>
       </Select>
 
-      <Select value={year != null ? String(year) : undefined} onValueChange={handleYear}>
+      <Select value={year != null ? String(year) : null} onValueChange={handleYear}>
         <SelectTrigger className="w-28">
           {year != null ? <span>{year}</span> : <span className="text-muted-foreground">Year</span>}
         </SelectTrigger>

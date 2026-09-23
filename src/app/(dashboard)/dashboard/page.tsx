@@ -44,6 +44,8 @@ export default function ServiceSummaryReportPage() {
   }, []);
 
   const canRun = !!(companyName && selectedMonth);
+  // TEMP DEBUG -- remove once the Run Report issue is diagnosed.
+  console.log("[page] companyName:", companyName, "| selectedMonth:", selectedMonth, "| canRun:", canRun);
 
   async function handleRunReport() {
     if (!canRun) return;
