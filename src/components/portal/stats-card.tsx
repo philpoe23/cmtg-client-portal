@@ -9,18 +9,18 @@ interface StatsCardProps {
 
 const variantStyles: Record<string, string> = {
   default: "text-foreground",
-  warning: "text-amber-400",
+  warning: "text-cmtg-status-pending-fg",
   muted: "text-muted-foreground",
 };
 
 export default function StatsCard({ title, value, variant = "default" }: StatsCardProps) {
   return (
     <Card>
-      <CardHeader className="pb-1 pt-4 px-5">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</CardTitle>
+      <CardHeader className="pb-1 pt-5 px-5.5">
+        <CardTitle className="font-sans text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="px-5 pb-4">
-        <p className={cn("text-3xl font-bold tabular-nums", variantStyles[variant])}>{value.toLocaleString()}</p>
+      <CardContent className="px-5.5 pb-5">
+        <p className={cn("font-heading text-cmtg-display font-semibold tabular-nums", variantStyles[variant])}>{value.toLocaleString()}</p>
       </CardContent>
     </Card>
   );

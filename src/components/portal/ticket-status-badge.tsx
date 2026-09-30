@@ -4,23 +4,23 @@ import { cn } from "@/lib/utils";
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
   open: {
     label: "Open",
-    className: "bg-blue-500/15 text-blue-400 border-blue-500/25",
+    className: "bg-cmtg-status-info-bg text-cmtg-status-info-fg",
   },
   "in progress": {
     label: "In Progress",
-    className: "bg-violet-500/15 text-violet-400 border-violet-500/25",
+    className: "bg-cmtg-status-progress-bg text-cmtg-status-progress-fg",
   },
   "waiting for customer": {
     label: "Waiting",
-    className: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+    className: "bg-cmtg-status-pending-bg text-cmtg-status-pending-fg",
   },
   pending: {
     label: "Pending",
-    className: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+    className: "bg-cmtg-status-pending-bg text-cmtg-status-pending-fg",
   },
   closed: {
     label: "Closed",
-    className: "bg-zinc-500/15 text-zinc-400 border-zinc-500/25",
+    className: "bg-cmtg-status-resolved-bg text-cmtg-status-resolved-fg",
   },
 };
 
@@ -28,7 +28,7 @@ function getStatusConfig(status: string) {
   return (
     STATUS_MAP[status.toLowerCase()] ?? {
       label: status,
-      className: "bg-muted text-muted-foreground border-border",
+      className: "bg-cmtg-status-neutral-bg text-cmtg-status-neutral-fg",
     }
   );
 }
@@ -41,7 +41,7 @@ interface TicketStatusBadgeProps {
 export function TicketStatusBadge({ status, className }: TicketStatusBadgeProps) {
   const config = getStatusConfig(status);
   return (
-    <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", config.className, className)}>
+    <Badge className={cn(config.className, className)}>
       {config.label}
     </Badge>
   );

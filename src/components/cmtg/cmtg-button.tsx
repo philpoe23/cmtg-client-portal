@@ -11,7 +11,7 @@ const cmtgButtonVariants = cva(
         secondary:
           "border-cmtg-forest bg-cmtg-surface text-cmtg-forest hover:bg-cmtg-forest/10 dark:border-cmtg-light-green dark:bg-transparent dark:text-cmtg-light-green dark:hover:bg-cmtg-light-green/10",
         ghost: "text-cmtg-ink hover:bg-cmtg-ink/[0.06]",
-        danger: "bg-cmtg-brick text-white hover:bg-[#A63C31]",
+        danger: "bg-cmtg-brick text-white hover:bg-cmtg-brick-dark",
       },
       size: {
         default: "px-5 py-[11px] text-sm",

@@ -141,7 +141,7 @@ export default function LoginPage() {
               <CardContent className="pt-6 pb-8 px-8 text-center space-y-6">
                 <div className="space-y-2">
                   <h1 className="text-3xl font-bold tracking-tight">Verification Code</h1>
-                  <p className="text-muted-foreground text-base">We sent a 6-digit code to your device.</p>
+                  <p className="text-muted-foreground text-base">Use your authentication app to get the 6-digit code.</p>
                 </div>
 
                 <form onSubmit={handleMfa} className="space-y-6">

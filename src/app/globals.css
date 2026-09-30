@@ -1,45 +1,22 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* CMTG brand display font (Geogrotesque) — actual files shipped in /public/fonts */
-@font-face {
-  font-family: "Geogrotesque";
-  src: url("/fonts/cmtg-light.ttf") format("truetype");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Geogrotesque";
-  src: url("/fonts/cmtg.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Geogrotesque";
-  src: url("/fonts/cmtg-bold.ttf") format("truetype");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 @custom-variant dark (&:is(.dark *));
 
 /*
- * CMTG brand tokens for the branded component set in src/components/cmtg.
- * Kappa Text (CMTG's body typeface) isn't available in /public/fonts, so
- * body copy falls back to the app's existing sans font (Geist) per the
- * brand style guide's own fallback stack.
+ * CMTG brand tokens (Component Kit style guide).
+ * Display/headings: Poppins · Body/UI: Work Sans — both loaded via next/font
+ * in src/app/layout.tsx.
  */
 :root {
   --cmtg-forest: #0a7171;
   --cmtg-forest-dark: #075454;
   --cmtg-blue-green: #51afae;
-  --cmtg-bright-green: #4dacab;
+  --cmtg-bright-green: #069d77;
   --cmtg-light-green: #73bfa9;
   --cmtg-amber: #c9932f;
   --cmtg-brick: #c0483c;
+  --cmtg-brick-dark: #a63c31;
   --cmtg-ink: #12302e;
   --cmtg-body: #3f5654;
   --cmtg-muted: #6d8180;
@@ -56,14 +33,17 @@
   --cmtg-status-critical-fg: #a63c31;
   --cmtg-status-info-bg: rgba(10, 113, 113, 0.1);
   --cmtg-status-info-fg: #0a7171;
+  --cmtg-status-neutral-bg: rgba(109, 129, 128, 0.12);
+  --cmtg-status-neutral-fg: #3f5654;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-work-sans), "Segoe UI", Arial, sans-serif;
+  --font-heading: var(--font-poppins), "Segoe UI", Arial, sans-serif;
+  --font-blueprint: var(--font-poppins), "Segoe UI", Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-blueprint: "Geogrotesque", "Arial", sans-serif;
 
   /* CMTG brand palette */
   --color-cmtg-forest: var(--cmtg-forest);
@@ -73,18 +53,27 @@
   --color-cmtg-light-green: var(--cmtg-light-green);
   --color-cmtg-amber: var(--cmtg-amber);
   --color-cmtg-brick: var(--cmtg-brick);
+  --color-cmtg-brick-dark: var(--cmtg-brick-dark);
   --color-cmtg-ink: var(--cmtg-ink);
   --color-cmtg-body: var(--cmtg-body);
   --color-cmtg-muted: var(--cmtg-muted);
   --color-cmtg-border: var(--cmtg-border);
   --color-cmtg-surface: var(--cmtg-surface);
   --color-cmtg-bg: var(--cmtg-bg);
+  --color-cmtg-status-resolved-bg: var(--cmtg-status-resolved-bg);
   --color-cmtg-status-resolved-fg: var(--cmtg-status-resolved-fg);
+  --color-cmtg-status-progress-bg: var(--cmtg-status-progress-bg);
   --color-cmtg-status-progress-fg: var(--cmtg-status-progress-fg);
+  --color-cmtg-status-pending-bg: var(--cmtg-status-pending-bg);
   --color-cmtg-status-pending-fg: var(--cmtg-status-pending-fg);
+  --color-cmtg-status-critical-bg: var(--cmtg-status-critical-bg);
   --color-cmtg-status-critical-fg: var(--cmtg-status-critical-fg);
+  --color-cmtg-status-info-bg: var(--cmtg-status-info-bg);
+  --color-cmtg-status-info-fg: var(--cmtg-status-info-fg);
+  --color-cmtg-status-neutral-bg: var(--cmtg-status-neutral-bg);
+  --color-cmtg-status-neutral-fg: var(--cmtg-status-neutral-fg);
 
-  /* CMTG type scale — display/heading use Geogrotesque (font-blueprint) */
+  /* CMTG type scale — display/heading use Poppins (font-heading) */
   --text-cmtg-display: 2rem;
   --text-cmtg-display--line-height: 2.5rem;
   --text-cmtg-heading: 1.375rem;
@@ -130,83 +119,77 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* Light theme — shadcn semantic tokens mapped onto the CMTG palette */
 :root {
-  --radius: 0.65rem;
-  /* Darker light theme */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.15 0.01 285);
-  --card: oklch(100% 0.00011 271.152);
-  --card-foreground: oklch(0.15 0.01 285);
-  --popover: oklch(0.98 0.002 285);
-  --popover-foreground: oklch(0.15 0.01 285);
-  /* Primary changed to darker teal */
-  --primary: oklch(0.44 0.07 188);
-  --primary-foreground: oklch(0.95 0.01 188);
-  --secondary: oklch(0.88 0.01 285);
-  --secondary-foreground: oklch(0.25 0.01 285);
-  --muted: oklch(0.88 0.01 285);
-  --muted-foreground: oklch(0.45 0.02 285);
-  --accent: oklch(0.88 0.01 285);
-  --accent-foreground: oklch(0.25 0.01 285);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.85 0.008 285);
-  --input: oklch(0.85 0.008 285);
-  /* Ring changed to darker teal */
-  --ring: oklch(0.44 0.07 188);
-  /* Charts updated with darker teal variations */
-  --chart-1: oklch(0.44 0.07 188);
-  --chart-2: oklch(0.48 0.06 195);
-  --chart-3: oklch(0.4 0.08 180);
-  --chart-4: oklch(0.52 0.05 190);
-  --chart-5: oklch(0.36 0.09 185);
-  /* CMTG brand sidebar — always the dark forest look, regardless of app theme */
+  /* 8px controls (rounded-lg), 12px cards (rounded-xl) */
+  --radius: 0.5rem;
+  --background: #f3f7f6;
+  --foreground: #12302e;
+  --card: #ffffff;
+  --card-foreground: #12302e;
+  --popover: #ffffff;
+  --popover-foreground: #12302e;
+  --primary: #0a7171;
+  --primary-foreground: #ffffff;
+  --secondary: #eef6f5;
+  --secondary-foreground: #0a7171;
+  --muted: #eaf1ef;
+  --muted-foreground: #6d8180;
+  --accent: #eef6f5;
+  --accent-foreground: #12302e;
+  --destructive: #c0483c;
+  --border: #dce6e4;
+  --input: #dce6e4;
+  --ring: #51afae;
+  --chart-1: #0a7171;
+  --chart-2: #51afae;
+  --chart-3: #069d77;
+  --chart-4: #73bfa9;
+  --chart-5: #c9932f;
+  /* CMTG brand sidebar — always the forest look, regardless of app theme */
   --sidebar: #0a7171;
   --sidebar-foreground: #cfeae7;
   --sidebar-primary: #ffffff;
   --sidebar-primary-foreground: #0a7171;
-  --sidebar-accent: #4dacab;
+  --sidebar-accent: rgba(255, 255, 255, 0.14);
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #164943;
-  --sidebar-ring: var(--cmtg-blue-green);
+  --sidebar-border: #075454;
+  --sidebar-ring: #51afae;
 }
 
+/* Dark theme — the kit's "Dark surface" */
 .dark {
-  --background: oklch(0.1 0.008 285);
-  --foreground: oklch(0.95 0.005 285);
-  --card: oklch(0.15 0.01 285);
-  --card-foreground: oklch(0.95 0.005 285);
-  --popover: oklch(0.15 0.01 285);
-  --popover-foreground: oklch(0.95 0.005 285);
-  /* Primary darker teal for dark mode */
-  --primary: oklch(0.5 0.08 188);
-  --primary-foreground: oklch(0.12 0.04 188);
-  --secondary: oklch(0.2 0.01 285);
-  --secondary-foreground: oklch(0.9 0.005 285);
-  --muted: oklch(0.2 0.01 285);
-  --muted-foreground: oklch(0.65 0.015 285);
-  --accent: oklch(0.2 0.01 285);
-  --accent-foreground: oklch(0.9 0.005 285);
-  --destructive: oklch(0.65 0.2 25);
-  --border: oklch(0.25 0.015 285);
-  --input: oklch(0.25 0.015 285);
-  /* Ring darker teal for dark mode */
-  --ring: oklch(0.48 0.09 188);
-  /* Charts updated with darker teal variations for dark mode */
-  --chart-1: oklch(0.5 0.08 188);
-  --chart-2: oklch(0.45 0.07 195);
-  --chart-3: oklch(0.55 0.06 180);
-  --chart-4: oklch(0.42 0.1 190);
-  --chart-5: oklch(0.58 0.05 185);
-  /* CMTG brand sidebar — same dark forest look as light mode */
+  --background: #0e1615;
+  --foreground: #f2f7f5;
+  --card: #16211f;
+  --card-foreground: #f2f7f5;
+  --popover: #16211f;
+  --popover-foreground: #f2f7f5;
+  --primary: #0a7171;
+  --primary-foreground: #ffffff;
+  --secondary: #1d2b29;
+  --secondary-foreground: #73bfa9;
+  --muted: #1d2b29;
+  --muted-foreground: #8aa09c;
+  --accent: #1d2b29;
+  --accent-foreground: #f2f7f5;
+  --destructive: #e0695c;
+  --border: #2a3937;
+  --input: #2a3937;
+  --ring: #51afae;
+  --chart-1: #51afae;
+  --chart-2: #73bfa9;
+  --chart-3: #57e0b4;
+  --chart-4: #8fdad9;
+  --chart-5: #e9c169;
   --sidebar: #0a7171;
   --sidebar-foreground: #cfeae7;
   --sidebar-primary: #ffffff;
   --sidebar-primary-foreground: #0a7171;
-  --sidebar-accent: #4dacab;
+  --sidebar-accent: rgba(255, 255, 255, 0.14);
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #164943;
-  --sidebar-ring: var(--cmtg-blue-green);
-  /* CMTG dark surface — same brand hues, tuned for a dark background */
+  --sidebar-border: #075454;
+  --sidebar-ring: #51afae;
   --cmtg-ink: #f2f7f5;
   --cmtg-body: #d7e4e1;
   --cmtg-muted: #8aa09c;
@@ -223,6 +206,8 @@
   --cmtg-status-critical-fg: #f0958a;
   --cmtg-status-info-bg: rgba(81, 175, 174, 0.16);
   --cmtg-status-info-fg: #8fdad9;
+  --cmtg-status-neutral-bg: rgba(138, 160, 156, 0.18);
+  --cmtg-status-neutral-fg: #b9c6c3;
 }
 
 @layer base {
@@ -234,6 +219,12 @@
   }
   html {
     @apply font-sans;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {

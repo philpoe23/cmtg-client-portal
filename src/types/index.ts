@@ -142,11 +142,15 @@ export interface CompanyTicketsResponse {
 
 // ─── PocketBase ─────────────────────────────────────────────────────────────
 
+/** Which hours the customer sees: what we invoice (default) or all hours logged by engineers. */
+export type HourType = "invoice_hours" | "actual_hours";
+
 export interface Account {
   id: string;
   cw_company_recid: number;
   company_name: string;
   is_active: boolean;
+  hour_type: HourType;
   created_at: string;
 }
 

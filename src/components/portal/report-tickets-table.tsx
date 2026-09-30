@@ -19,7 +19,7 @@ import { ChevronUp, ChevronDown, ChevronsUpDown, Download, MapPin, Search, Slide
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { downloadXlsx, type XlsxColumnType } from "@/lib/api/xlsx";
-import type { TicketRecord } from "@/types";
+import type { HourType, TicketRecord } from "@/types";
 
 type SortKey = keyof TicketRecord;
 type SortDir = "asc" | "desc";
@@ -152,11 +152,11 @@ function getSlaMetCount(ticket: TicketRecord): number {
   return [ticket["SLA Response"], ticket["SLA Plan"], ticket["SLA Resolution"]].filter((v) => v === "Met").length;
 }
 
-function getSlaColor(count: number): string {
-  if (count === 3) return "#70AD47";
-  if (count === 2) return "#FFC000";
-  if (count === 1) return "#FF6B6B";
-  return "#C00000";
+function getSlaVariant(count: number): "resolved" | "progress" | "pending" | "critical" {
+  if (count === 3) return "resolved";
+  if (count === 2) return "progress";
+  if (count === 1) return "pending";
+  return "critical";
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -164,12 +164,12 @@ function getSlaColor(count: number): string {
 function SlaAttainmentBadge({ value }: { value: string }) {
   const cls =
     value === "Met"
-      ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700"
+      ? "bg-cmtg-status-resolved-bg text-cmtg-status-resolved-fg"
       : value === "Missed"
-        ? "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700"
-        : "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700";
+        ? "bg-cmtg-status-critical-bg text-cmtg-status-critical-fg"
+        : "bg-cmtg-status-pending-bg text-cmtg-status-pending-fg";
   return (
-    <Badge variant="outline" className={cn("text-xs font-normal", cls)}>
+    <Badge className={cls}>
       {value}
     </Badge>
   );
@@ -178,12 +178,12 @@ function SlaAttainmentBadge({ value }: { value: string }) {
 function SlaSubBadge({ value }: { value: string }) {
   const cls =
     value === "Met"
-      ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700"
+      ? "bg-cmtg-status-resolved-bg text-cmtg-status-resolved-fg"
       : value === "Not Met"
-        ? "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700"
-        : "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700";
+        ? "bg-cmtg-status-critical-bg text-cmtg-status-critical-fg"
+        : "bg-cmtg-status-pending-bg text-cmtg-status-pending-fg";
   return (
-    <Badge variant="outline" className={cn("text-xs font-normal", cls)}>
+    <Badge className={cls}>
       {value || "—"}
     </Badge>
   );
@@ -191,14 +191,7 @@ function SlaSubBadge({ value }: { value: string }) {
 
 function StatusChip({ closed }: { closed: boolean }) {
   return (
-    <Badge
-      variant="outline"
-      className={
-        closed
-          ? "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800/40 dark:text-slate-300"
-          : "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-      }
-    >
+    <Badge variant={closed ? "resolved" : "info"}>
       {closed ? "Closed" : "Open"}
     </Badge>
   );
@@ -207,28 +200,28 @@ function StatusChip({ closed }: { closed: boolean }) {
 export function PriorityChip({ value }: { value: string }) {
   const cls =
     value === "Critical"
-      ? "border-red-300 bg-red-100 text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-400"
+      ? "bg-cmtg-status-critical-bg text-cmtg-status-critical-fg"
       : value === "High"
-        ? "border-orange-300 bg-orange-100 text-orange-800 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+        ? "bg-cmtg-status-pending-bg text-cmtg-status-pending-fg"
         : value === "Medium"
-          ? "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-          : "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800/40 dark:text-slate-300";
+          ? "bg-cmtg-status-progress-bg text-cmtg-status-progress-fg"
+          : "bg-cmtg-status-neutral-bg text-cmtg-status-neutral-fg";
   return (
-    <Badge variant="outline" className={cn("text-xs font-normal", cls)}>
+    <Badge className={cls}>
       {value || "—"}
     </Badge>
   );
 }
 
+// Technician chips rotate through the CMTG brand hues so names stay distinguishable.
 const TECH_COLORS = [
-  "border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-  "border-cyan-300 bg-cyan-100 text-cyan-800 dark:border-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
-  "border-pink-300 bg-pink-100 text-pink-800 dark:border-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
-  "border-lime-300 bg-lime-100 text-lime-800 dark:border-lime-700 dark:bg-lime-900/30 dark:text-lime-400",
-  "border-orange-300 bg-orange-100 text-orange-800 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  "border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
-  "border-fuchsia-300 bg-fuchsia-100 text-fuchsia-800 dark:border-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400",
-  "border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+  "bg-cmtg-forest/10 text-cmtg-forest dark:bg-cmtg-blue-green/16 dark:text-[#8FDAD9]",
+  "bg-cmtg-bright-green/12 text-[#057a5c] dark:bg-cmtg-bright-green/24 dark:text-[#57E0B4]",
+  "bg-cmtg-amber/14 text-[#8a6620] dark:bg-cmtg-amber/22 dark:text-[#E9C169]",
+  "bg-cmtg-blue-green/16 text-[#2f7c7b] dark:bg-cmtg-blue-green/22 dark:text-[#8FDAD9]",
+  "bg-cmtg-light-green/20 text-[#2f6b59] dark:bg-cmtg-light-green/20 dark:text-[#A9DCCB]",
+  "bg-cmtg-brick/12 text-[#a63c31] dark:bg-cmtg-brick/22 dark:text-[#F0958A]",
+  "bg-cmtg-ink/8 text-cmtg-ink dark:bg-white/10 dark:text-[#D7E4E1]",
 ];
 
 function techColorIndex(name: string): number {
@@ -248,7 +241,7 @@ function TechsChips({ value }: { value: string }) {
   return (
     <div className="flex flex-wrap gap-1">
       {techs.map((tech) => (
-        <Badge key={tech} variant="outline" className={cn("text-xs font-normal", TECH_COLORS[techColorIndex(tech)])}>
+        <Badge key={tech} className={TECH_COLORS[techColorIndex(tech)]}>
           {tech}
         </Badge>
       ))}
@@ -259,10 +252,7 @@ function TechsChips({ value }: { value: string }) {
 function SiteChip({ value }: { value: string }) {
   if (!value) return <span className="text-sm font-medium">—</span>;
   return (
-    <Badge
-      variant="outline"
-      className="gap-1 text-xs font-normal border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800/40 dark:text-slate-300"
-    >
+    <Badge variant="neutral" className="gap-1">
       <MapPin className="size-3" />
       {value}
     </Badge>
@@ -271,17 +261,14 @@ function SiteChip({ value }: { value: string }) {
 
 function SlaStatusChip({ ticket }: { ticket: TicketRecord }) {
   const count = getSlaMetCount(ticket);
-  const color = getSlaColor(count);
+  const variant = getSlaVariant(count);
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger>
-          <span
-            className="inline-flex cursor-default select-none items-center rounded-full px-2 py-0.5 text-xs font-medium text-white"
-            style={{ backgroundColor: color }}
-          >
+          <Badge variant={variant} className="cursor-default select-none">
             {count} met
-          </span>
+          </Badge>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs">
           <p>Response: {ticket["SLA Response"]}</p>
@@ -293,7 +280,56 @@ function SlaStatusChip({ ticket }: { ticket: TicketRecord }) {
   );
 }
 
-function HoursSummaryBar({ tickets }: { tickets: TicketRecord[] }) {
+// ─── Hour type ───────────────────────────────────────────────────────────────
+
+type AgreementBucket = "ssa" | "msa" | "dedicated" | "noAgreement";
+
+function agreementBucket(agreement: string | null | undefined): AgreementBucket {
+  const ag = (agreement ?? "").toLowerCase();
+  if (ag.includes("ssa")) return "ssa";
+  if (ag.includes("msa")) return "msa";
+  if (ag.includes("dedicated")) return "dedicated";
+  return "noAgreement";
+}
+
+/**
+ * The report API's hour fields are invoice (billable) hours. For accounts set
+ * to actual hours, rebuild them from each time entry's `actual_hours` — every
+ * hour an engineer logged, billable or not — so the table, sorting, totals,
+ * export and detail dialog all read the same fields in either mode.
+ * Period fields come from the `by_period` entries matching `periodLabel`.
+ */
+function toActualHours(ticket: TicketRecord, periodLabel: string): TicketRecord {
+  const summary = ticket.hours_summary;
+  if (!summary) return ticket;
+
+  const byPeriod = (summary.by_period ?? []).map((period) => ({
+    ...period,
+    billable_hours: period.actual_hours,
+    non_billable_hours: "0",
+    entries: period.entries.map((entry) => ({ ...entry, billable_hours: entry.actual_hours, non_billable_hours: "0" })),
+  }));
+
+  const inPeriod = { ssa: 0, msa: 0, dedicated: 0, noAgreement: 0 };
+  for (const period of byPeriod) {
+    if (period.period !== periodLabel) continue;
+    for (const entry of period.entries) inPeriod[agreementBucket(entry.agreement)] += Number(entry.actual_hours) || 0;
+  }
+  const allTime = byPeriod.reduce((s, p) => s + (Number(p.actual_hours) || 0), 0);
+
+  return {
+    ...ticket,
+    "SSA Hours": inPeriod.ssa,
+    "MSA Hours": inPeriod.msa,
+    "Dedicated Resource Hours": inPeriod.dedicated,
+    "No Agreement Hours": inPeriod.noAgreement,
+    "Written Off / Non-Billable Hours": 0,
+    "Total Hours": inPeriod.ssa + inPeriod.msa + inPeriod.dedicated + inPeriod.noAgreement,
+    hours_summary: { ...summary, total_hours: allTime.toFixed(2), by_period: byPeriod },
+  };
+}
+
+function HoursSummaryBar({ tickets, hourType }: { tickets: TicketRecord[]; hourType: HourType }) {
   const ssa = tickets.reduce((s, t) => s + (t["SSA Hours"] ?? 0), 0);
   const msa = tickets.reduce((s, t) => s + (t["MSA Hours"] ?? 0), 0);
   const dedicated = tickets.reduce((s, t) => s + (t["Dedicated Resource Hours"] ?? 0), 0);
@@ -302,6 +338,7 @@ function HoursSummaryBar({ tickets }: { tickets: TicketRecord[] }) {
 
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">{hourType === "actual_hours" ? "Actual hours" : "Invoiced hours"}</span>
       <span>
         <span className="text-muted-foreground">SSA </span>
         <strong>{ssa.toFixed(2)}h</strong>
@@ -407,7 +444,17 @@ function TextBlock({ label, text }: { label: string; text: string }) {
 
 // ─── Ticket detail content (shared by the dialog and any inline panel) ───────
 
-export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRecord; periodLabel: string }) {
+export function TicketDetailContent({
+  ticket,
+  periodLabel,
+  hourType = "invoice_hours",
+}: {
+  ticket: TicketRecord;
+  periodLabel: string;
+  hourType?: HourType;
+}) {
+  // Actual hours already include non-billable time, so there's nothing "written off" to show.
+  const showWrittenOff = hourType === "invoice_hours";
   return (
     <div className="grid gap-6">
       {/* Chips row — always visible */}
@@ -478,12 +525,14 @@ export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRec
               <Field label="MSA" value={(ticket["MSA Hours"] ?? 0).toFixed(2)} />
               <Field label="Dedicated" value={(ticket["Dedicated Resource Hours"] ?? 0).toFixed(2)} />
               <Field label="No Agreement" value={(ticket["No Agreement Hours"] ?? 0).toFixed(2)} />
-              <Field label="Written Off">
-                {(() => {
-                  const v = ticket["Written Off / Non-Billable Hours"] ?? 0;
-                  return <p className={v > 0 ? "font-bold text-amber-600 dark:text-amber-400" : "font-medium"}>{v.toFixed(2)}</p>;
-                })()}
-              </Field>
+              {showWrittenOff && (
+                <Field label="Written Off">
+                  {(() => {
+                    const v = ticket["Written Off / Non-Billable Hours"] ?? 0;
+                    return <p className={v > 0 ? "font-bold text-cmtg-status-pending-fg" : "font-medium"}>{v.toFixed(2)}</p>;
+                  })()}
+                </Field>
+              )}
               <Field label="Total" value={(ticket["Total Hours"] ?? 0).toFixed(2)} />
             </div>
           </div>
@@ -496,39 +545,32 @@ export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRec
             {ticket.hours_summary ? (
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
                 {(() => {
-                  let ssa = 0,
-                    msa = 0,
-                    dedicated = 0,
-                    noAgreement = 0,
-                    writtenOff = 0;
+                  const hours = { ssa: 0, msa: 0, dedicated: 0, noAgreement: 0 };
+                  let writtenOff = 0;
                   for (const period of ticket.hours_summary!.by_period ?? []) {
                     for (const entry of period.entries) {
-                      const ag = (entry.agreement ?? "").toLowerCase();
-                      const billable = Number(entry.billable_hours) || 0;
                       writtenOff += Number(entry.non_billable_hours) || 0;
-                      if (ag.includes("ssa")) ssa += billable;
-                      else if (ag.includes("msa")) msa += billable;
-                      else if (ag.includes("dedicated")) dedicated += billable;
-                      else noAgreement += billable;
+                      hours[agreementBucket(entry.agreement)] += Number(entry.billable_hours) || 0;
                     }
                   }
                   const total = Number(ticket.hours_summary!.total_hours) || 0;
                   return (
                     <>
-                      <Field label="SSA" value={ssa.toFixed(2)} />
-                      <Field label="MSA" value={msa.toFixed(2)} />
-                      <Field label="Dedicated" value={dedicated.toFixed(2)} />
-                      <Field label="No Agreement" value={noAgreement.toFixed(2)} />
-                      <Field label="Written Off">
-                        <p
-                          className={writtenOff > 0 ? "font-bold text-amber-600 dark:text-amber-400" : "font-medium"}
-                          style={writtenOff > 0 ? { color: "oklch(66.6% 0.179 58.318)" } : undefined}
-                        >
-                          {writtenOff.toFixed(2)}
-                        </p>
-                      </Field>
+                      <Field label="SSA" value={hours.ssa.toFixed(2)} />
+                      <Field label="MSA" value={hours.msa.toFixed(2)} />
+                      <Field label="Dedicated" value={hours.dedicated.toFixed(2)} />
+                      <Field label="No Agreement" value={hours.noAgreement.toFixed(2)} />
+                      {showWrittenOff && (
+                        <Field label="Written Off">
+                          <p
+                            className={writtenOff > 0 ? "font-bold text-cmtg-status-pending-fg" : "font-medium"}
+                                                      >
+                            {writtenOff.toFixed(2)}
+                          </p>
+                        </Field>
+                      )}
                       <Field label="Total">
-                        <p className="font-medium" style={{ color: "#0A7171" }}>
+                        <p className="font-semibold text-primary">
                           {total.toFixed(2)}
                         </p>
                       </Field>
@@ -546,7 +588,7 @@ export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRec
         <Tabs defaultValue="summary" className="mt-1">
           <TabsList>
             <TabsTrigger value="summary">Summary</TabsTrigger>
-            <TabsTrigger value="billing">Billing History</TabsTrigger>
+            <TabsTrigger value="billing">{showWrittenOff ? "Billing History" : "Hours History"}</TabsTrigger>
           </TabsList>
 
           {/* ── Summary tab ── */}
@@ -567,7 +609,9 @@ export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRec
             {ticket.hours_summary?.by_period && ticket.hours_summary.by_period.length > 0 ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Full billing history across all periods</p>
+                  <p className="text-xs text-muted-foreground">
+                    {showWrittenOff ? "Full billing history across all periods" : "All hours logged across all periods"}
+                  </p>
                   <span className="text-xs text-muted-foreground">
                     All-time total: <strong className="text-foreground">{Number(ticket.hours_summary.total_hours).toFixed(2)} hrs</strong>
                   </span>
@@ -578,7 +622,7 @@ export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRec
                       <span className="text-xs font-medium">
                         {period.period}
                         {period.is_current_month && (
-                          <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                          <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-cmtg-status-info-bg text-cmtg-status-info-fg">
                             current
                           </span>
                         )}
@@ -609,7 +653,9 @@ export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRec
                 ))}
               </div>
             ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">No billing history available for this ticket.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                {showWrittenOff ? "No billing history available for this ticket." : "No hours logged for this ticket."}
+              </p>
             )}
           </TabsContent>
         </Tabs>
@@ -619,7 +665,19 @@ export function TicketDetailContent({ ticket, periodLabel }: { ticket: TicketRec
 
 // ─── Ticket detail dialog ────────────────────────────────────────────────────
 
-export function TicketDetailDialog({ ticket, open, onClose, periodLabel }: { ticket: TicketRecord; open: boolean; onClose: () => void; periodLabel: string }) {
+export function TicketDetailDialog({
+  ticket,
+  open,
+  onClose,
+  periodLabel,
+  hourType,
+}: {
+  ticket: TicketRecord;
+  open: boolean;
+  onClose: () => void;
+  periodLabel: string;
+  hourType?: HourType;
+}) {
   return (
     <Dialog
       open={open}
@@ -632,7 +690,7 @@ export function TicketDetailDialog({ ticket, open, onClose, periodLabel }: { tic
           <DialogTitle>Ticket #{ticket["Ticket #"]}</DialogTitle>
           <DialogDescription className="sr-only">{ticket.Summary || "Ticket detail"}</DialogDescription>
         </DialogHeader>
-        <TicketDetailContent ticket={ticket} periodLabel={periodLabel} />
+        <TicketDetailContent ticket={ticket} periodLabel={periodLabel} hourType={hourType} />
       </DialogContent>
     </Dialog>
   );
@@ -811,7 +869,7 @@ const TABLE_COLUMNS: TableColDef[] = [
 
 // ─── Columns toggle ───────────────────────────────────────────────────────────
 
-function ColumnsToggle({ visible, onChange }: { visible: Set<string>; onChange: (v: Set<string>) => void }) {
+function ColumnsToggle({ columns, visible, onChange }: { columns: TableColDef[]; visible: Set<string>; onChange: (v: Set<string>) => void }) {
   return (
     <Popover>
       <PopoverTrigger
@@ -823,7 +881,7 @@ function ColumnsToggle({ visible, onChange }: { visible: Set<string>; onChange: 
         }
       />
       <PopoverContent align="end" className="w-48 p-1 gap-1">
-        {TABLE_COLUMNS.filter((c) => !c.alwaysVisible).map((col) => {
+        {columns.filter((c) => !c.alwaysVisible).map((col) => {
           const checked = visible.has(col.key);
           return (
             <button
@@ -861,9 +919,16 @@ interface ReportTicketsTableProps {
   total: number;
   periodLabel: string;
   companyName?: string | null;
+  hourType?: HourType;
 }
 
-export default function ReportTicketsTable({ tickets, periodLabel, companyName }: ReportTicketsTableProps) {
+export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, companyName, hourType = "invoice_hours" }: ReportTicketsTableProps) {
+  const tickets = useMemo(
+    () => (hourType === "actual_hours" ? rawTickets.map((t) => toActualHours(t, periodLabel)) : rawTickets),
+    [rawTickets, hourType, periodLabel],
+  );
+  // Written-off hours only mean something against invoiced hours.
+  const columns = useMemo(() => (hourType === "actual_hours" ? TABLE_COLUMNS.filter((c) => c.key !== "wo") : TABLE_COLUMNS), [hourType]);
   const [activeTab, setActiveTab] = useState<"all" | "open" | "closed">("all");
   const [sortKey, setSortKey] = useState<SortKey>("Ticket #");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -927,7 +992,7 @@ export default function ReportTicketsTable({ tickets, periodLabel, companyName }
     });
   }, [filtered, sortKey, sortDir]);
 
-  const visibleCols = TABLE_COLUMNS.filter((c) => visibleColumns.has(c.key));
+  const visibleCols = columns.filter((c) => visibleColumns.has(c.key));
 
   async function handleExport() {
     const safePeriod = periodLabel.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
@@ -989,13 +1054,13 @@ export default function ReportTicketsTable({ tickets, periodLabel, companyName }
               <Download className="h-3.5 w-3.5" />
               <span className="text-xs">{exporting ? "Exporting…" : "Export Excel"}</span>
             </Button>
-            <ColumnsToggle visible={visibleColumns} onChange={setVisibleColumns} />
+            <ColumnsToggle columns={columns} visible={visibleColumns} onChange={setVisibleColumns} />
           </div>
         </div>
 
         {/* Hours summary */}
         <div className="border-b border-border px-4 py-2.5">
-          <HoursSummaryBar tickets={tabTickets} />
+          <HoursSummaryBar tickets={tabTickets} hourType={hourType} />
         </div>
 
         {/* Table */}
@@ -1048,7 +1113,7 @@ export default function ReportTicketsTable({ tickets, periodLabel, companyName }
         )}
       </Card>
 
-      {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel={periodLabel} />}
+      {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel={periodLabel} hourType={hourType} />}
     </Tabs>
   );
 }

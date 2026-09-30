@@ -24,6 +24,7 @@ export const DEV_MOCK_ACCOUNT_USER: AccountUser = {
     cw_company_recid: parseInt(process.env.NEXT_PUBLIC_DEV_BYPASS_CW_RECID ?? "19450", 19450),
     company_name: "Dev Bypass",
     is_active: true,
+    hour_type: "invoice_hours",
     created_at: new Date().toISOString(),
   },
 };

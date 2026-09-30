@@ -1,7 +1,17 @@
 import { cache } from "react";
 import { createClient } from "@/lib/pocketbase/server";
 import { DEV_BYPASS, DEV_MOCK_ACCOUNT_USER } from "@/lib/dev-bypass";
-import type { AccountUser } from "@/types";
+import type { AccountUser, HourType } from "@/types";
+
+/**
+ * accounts.hour_type is a select managed by the parent app. Anything other
+ * than an explicit actual-hours value (unset, unknown) falls back to invoice
+ * hours. Also accepts the "acutal_hours" spelling the select was created with.
+ */
+function toHourType(raw: unknown): HourType {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === "actual_hours" || value === "acutal_hours" ? "actual_hours" : "invoice_hours";
+}
 
 /**
  * Fetch the current user's account record from PocketBase authStore.
@@ -26,7 +36,10 @@ export const getAccountUser = cache(async (): Promise<AccountUser | null> => {
   const portalUser = await pb
     .collection("portal_users")
     .getOne(model["id"] as string, { expand: "account" })
-    .catch(() => null);
+    .catch((err) => {
+      console.error("[getAccountUser] portal_users lookup failed:", err?.status, err?.message);
+      return null;
+    });
   if (!portalUser) return null;
 
   const expandData = portalUser.expand as Record<string, unknown> | undefined;
@@ -48,6 +61,7 @@ export const getAccountUser = cache(async (): Promise<AccountUser | null> => {
       cw_company_recid: account["cw_company_recid"] as number,
       company_name: account["company_name"] as string,
       is_active: (account["is_active"] as boolean) ?? true,
+      hour_type: toHourType(account["hour_type"]),
       created_at: account["created"] as string,
     },
   };

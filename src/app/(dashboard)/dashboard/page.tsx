@@ -4,23 +4,24 @@ import { useState, useEffect } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { toast } from "sonner";
 import { getReportPreview } from "@/lib/api/report";
-import { fetchCompanyName } from "../service-summary-report/actions";
+import { fetchReportAccount } from "../service-summary-report/actions";
 import { useTrack } from "@/hooks/use-track";
 import { MonthYearPicker, type MonthYearValue } from "@/components/ui/month-year-picker";
 import { Button } from "@/components/ui/button";
 import ReportTicketsTable from "@/components/portal/report-tickets-table";
-import type { TicketRecord } from "@/types";
+import type { HourType, TicketRecord } from "@/types";
 
 export default function ServiceSummaryReportPage() {
   const { track } = useTrack();
 
   const [companyName, setCompanyName] = useState<string | null>(null);
+  const [hourType, setHourType] = useState<HourType>("invoice_hours");
   const [selectedMonth, setSelectedMonth] = useState<MonthYearValue | undefined>();
   const [loading, setLoading] = useState(false);
   const [tickets, setTickets] = useState<TicketRecord[] | null>(null);
   const [totalTickets, setTotalTickets] = useState(0);
 
-  // Resolve company name via server action on mount
+  // Resolve company name and hour type via server action on mount
   useEffect(() => {
     // fetch("http://10.90.90.33:8001/api/report/preview", {
     // method: "POST",
@@ -29,10 +30,12 @@ export default function ServiceSummaryReportPage() {
     // })
     // .then((r) => r.json())
     // .then((d) => console.log(JSON.stringify(d.data?.[0], null, 2)));
-    fetchCompanyName()
-      .then((name) => {
-        if (name) setCompanyName(name);
-        else toast.error("Could not resolve your company. Please contact support.");
+    fetchReportAccount()
+      .then((account) => {
+        if (account) {
+          setCompanyName(account.companyName);
+          setHourType(account.hourType);
+        } else toast.error("Could not resolve your company. Please contact support.");
       })
       .catch(() => toast.error("Failed to load your account. Please refresh or contact support."));
   }, []);
@@ -97,6 +100,7 @@ export default function ServiceSummaryReportPage() {
           tickets={tickets}
           total={totalTickets}
           companyName={companyName}
+          hourType={hourType}
           periodLabel={selectedMonth ? format(new Date(selectedMonth.year, selectedMonth.month - 1, 1), "MMMM yyyy") : ""}
         />
       )}
