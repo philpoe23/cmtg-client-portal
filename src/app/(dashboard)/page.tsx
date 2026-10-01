@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { getReportPreview } from "@/lib/api/report";
 import { fetchReportAccount } from "./service-summary-report/actions";
 import { useTrack } from "@/hooks/use-track";
+import { track as trackEvent } from "@/lib/analytics";
 import { MonthYearPicker, type MonthYearValue } from "@/components/ui/month-year-picker";
 import { Button } from "@/components/ui/button";
 import ReportTicketsTable from "@/components/portal/report-tickets-table";
@@ -69,9 +70,15 @@ export default function ServiceSummaryReportPage() {
           start_date: startDate,
           end_date: endDate,
           total_tickets: result.total_tickets,
+          hour_type: hourType,
         },
       });
     } catch (err) {
+      trackEvent("run_service_report_failed", {
+        company: companyName,
+        month: `${selectedMonth!.year}-${String(selectedMonth!.month).padStart(2, "0")}`,
+        error: err instanceof Error ? err.message : String(err),
+      });
       toast.error(err instanceof Error ? err.message : "Failed to load report. Please try again.");
       setTickets(null);
     } finally {

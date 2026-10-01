@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { track } from "@/lib/analytics";
 import type { CompanyTicket, TicketRecord } from "@/types";
 import { useLazyReportTickets } from "@/hooks/use-lazy-report-tickets";
 import { CmtgStatusBadge } from "@/components/cmtg/cmtg-status-badge";
@@ -39,6 +40,7 @@ export function DashboardTicketsTable({ tickets, startDate, endDate }: Dashboard
       const records = await ensureLoaded();
       const record = records.find((r) => r["Ticket #"] === ticket.ticket_id);
       if (!record) {
+        track("ticket_open_unavailable", { ticket_id: ticket.ticket_id, source: "dashboard" });
         toast.error("Ticket details are not available for this ticket.");
         return;
       }
@@ -104,20 +106,28 @@ export function DashboardTicketsTable({ tickets, startDate, endDate }: Dashboard
             Showing {start + 1}–{Math.min(start + PAGE_SIZE, filteredTickets.length)} of {filteredTickets.length} tickets
           </p>
           <div className="flex items-center gap-2">
-            <CmtgButton type="button" variant="secondary" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+            <CmtgButton type="button" variant="secondary" size="sm" onClick={() => {
+                const next = Math.max(1, page - 1);
+                setPage(next);
+                track("dashboard_page_change", { page: next });
+              }} disabled={page === 1}>
               Previous
             </CmtgButton>
             <span className="text-xs text-muted-foreground">
               {page} / {totalPages}
             </span>
-            <CmtgButton type="button" variant="secondary" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+            <CmtgButton type="button" variant="secondary" size="sm" onClick={() => {
+                const next = Math.min(totalPages, page + 1);
+                setPage(next);
+                track("dashboard_page_change", { page: next });
+              }} disabled={page === totalPages}>
               Next
             </CmtgButton>
           </div>
         </div>
       )}
 
-      {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel="Last 30 Days" />}
+      {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel="Last 30 Days" source="dashboard" />}
     </div>
   );
 }

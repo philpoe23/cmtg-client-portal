@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/pocketbase/client";
+import { track as trackUmami, type EventData } from "@/lib/analytics";
 
 interface TrackOptions {
   event_type: "page_view" | "click" | "filter" | "search" | "export" | string;
@@ -15,6 +16,13 @@ export function useTrack() {
 
   const track = useCallback(
     async ({ event_type, event_name, metadata }: TrackOptions) => {
+      // Umami only takes flat primitive values, so nested metadata is stringified.
+      const flat: EventData = { event_type };
+      for (const [key, value] of Object.entries(metadata ?? {})) {
+        flat[key] = value === null || ["string", "number", "boolean"].includes(typeof value) ? (value as EventData[string]) : JSON.stringify(value);
+      }
+      trackUmami(event_name, flat);
+
       try {
         const pb = createClient();
         const model = pb.authStore.model;

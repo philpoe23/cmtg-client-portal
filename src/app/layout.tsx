@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
+import { Umami } from "@/components/umami";
 
 // CMTG brand type: Poppins for display/headings, Work Sans for body/UI.
 const poppins = Poppins({
@@ -55,6 +56,7 @@ export default function RootLayout({
           <TooltipProvider>
             <AuthProvider>{children}</AuthProvider>
             <Toaster richColors position="top-right" />
+            <Umami />
           </TooltipProvider>
         </ThemeProvider>
       </body>

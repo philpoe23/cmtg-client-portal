@@ -8,6 +8,7 @@ import type { CmtgTicketStatus } from "@/components/cmtg/cmtg-types";
 import { CmtgInput } from "@/components/cmtg/cmtg-input";
 import { CmtgTicketList } from "@/components/cmtg/cmtg-ticket-list";
 import { TicketDetailInlinePanel } from "@/components/portal/ticket-detail-inline-panel";
+import { track } from "@/lib/analytics";
 
 interface AllTicketsTableProps {
   tickets: CompanyTicket[];
@@ -36,7 +37,15 @@ export function AllTicketsTable({ tickets, startDate, endDate }: AllTicketsTable
     latestRequestRef.current = id;
     const records = await ensureLoaded();
     if (latestRequestRef.current !== id) return; // a newer click superseded this one
-    setSelectedTicket(records.find((r) => String(r["Ticket #"]) === id) ?? null);
+    const record = records.find((r) => String(r["Ticket #"]) === id) ?? null;
+    setSelectedTicket(record);
+    track(record ? "ticket_open" : "ticket_open_unavailable", {
+      ticket_id: id,
+      summary: record?.Summary,
+      status: record ? (record.Closed_Flag === 1 ? "closed" : "open") : undefined,
+      priority: record?.["SLA Priority"],
+      source: "all_tickets",
+    });
   }
 
   if (!tickets.length) {
@@ -53,7 +62,10 @@ export function AllTicketsTable({ tickets, startDate, endDate }: AllTicketsTable
           selectedTicketId={selectedId}
           onSelectTicket={handleSelectTicket}
           activeFilter={statusFilter}
-          onFilterChange={setStatusFilter}
+          onFilterChange={(status) => {
+            setStatusFilter(status);
+            track("tickets_status_filter", { status: status ?? "all" });
+          }}
         />
         <TicketDetailInlinePanel ticket={selectedTicket} loading={reportLoading && selectedId !== null} periodLabel="Last 30 Days" />
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { track } from "@/lib/analytics";
 import { startTotpEnrollment, confirmTotpEnrollment } from "@/app/login/mfa-setup/actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,7 @@ export function MfaEnrollment({ onEnrolled, onLogout }: MfaEnrollmentProps) {
     try {
       const result = await confirmTotpEnrollment(code);
       if (!result.success) {
+        track("mfa_enroll_failed", { error: result.error ?? "invalid_code" });
         toast.error(result.error ?? "Invalid code. Please try again.");
         setVerifying(false);
         return;
@@ -63,6 +65,7 @@ export function MfaEnrollment({ onEnrolled, onLogout }: MfaEnrollmentProps) {
       // the destination page, so clearing this here would leave the old
       // screen sitting there looking frozen while /dashboard loads.
       setRedirecting(true);
+      track("mfa_enrolled");
       toast.success("Two-factor authentication enabled!");
       onEnrolled();
     } catch {

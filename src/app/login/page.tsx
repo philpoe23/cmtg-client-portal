@@ -14,6 +14,7 @@ import { AuthShell } from "@/components/auth-shell";
 import { StepFade } from "@/components/step-fade";
 import { MfaEnrollment } from "@/components/mfa-enrollment";
 import pb from "@/lib/pocketbase";
+import { track } from "@/lib/analytics";
 import Image from "next/image";
 
 type Step = "credentials" | "mfa" | "mfa-setup";
@@ -32,6 +33,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await pb.collection("portal_users").authWithPassword(email, password);
+      track("login_password_ok", { email, mfa_enabled: Boolean(pb.authStore.record?.totp_enabled) });
 
       if (pb.authStore.record?.totp_enabled) {
         // Password verified, but the session cookie is withheld until the
@@ -54,9 +56,11 @@ export default function LoginPage() {
 
       // First login, account not yet set up. Still a real navigation — the
       // proxy owns where an unverified session belongs (/login/setup).
+      track("login_first_time", { email });
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
+      track("login_failed", { email, step: "password", error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
@@ -69,9 +73,12 @@ export default function LoginPage() {
     try {
       const valid = await verifyTotpLogin(pb.authStore.token, totpCode);
       if (!valid) {
+        track("login_failed", { email, step: "mfa", error: "invalid_code" });
         toast.error("Invalid code");
         return;
       }
+
+      track("login", { email, method: "password+mfa" });
 
       // The server action just persisted the verified session as an httpOnly
       // cookie directly — document.cookie can't do that once a cookie of this
@@ -79,6 +86,7 @@ export default function LoginPage() {
       router.push("/dashboard");
       router.refresh();
     } catch {
+      track("login_failed", { email, step: "mfa", error: "verify_error" });
       toast.error("Invalid code");
     } finally {
       setLoading(false);

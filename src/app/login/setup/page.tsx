@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { track } from "@/lib/analytics";
 import { createClient } from "@/lib/pocketbase/client";
 import { completeAccountSetup, logout } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -52,10 +53,12 @@ export default function SetupPage() {
         return;
       }
 
+      track("account_setup_complete", { email: pb.authStore.record?.email as string | undefined });
       toast.success("Password set! Redirecting…");
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
+      track("account_setup_failed", { error: err instanceof Error ? err.message : String(err) });
       if (err instanceof ClientResponseError) {
         console.error("Failed to set password:", err.response);
         toast.error("Failed to set password — make sure your temporary password is correct and the new password meets the requirements.");

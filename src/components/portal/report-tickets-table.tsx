@@ -1,10 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { type DateRange } from "react-day-picker";
 import { isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { ChevronUp, ChevronDown, ChevronsUpDown, Download, MapPin, Search, Slide
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { downloadXlsx, type XlsxColumnType } from "@/lib/api/xlsx";
+import { track } from "@/lib/analytics";
 import type { HourType, TicketRecord } from "@/types";
 
 type SortKey = keyof TicketRecord;
@@ -93,6 +95,7 @@ function SmartSearchBar({
                 setSearchColumn(col);
                 setSearchValue("");
                 setSearchDate(undefined);
+                track("report_search_column", { column: col.header });
               }}
             >
               {col.header}
@@ -294,7 +297,7 @@ function agreementBucket(agreement: string | null | undefined): AgreementBucket 
 
 /**
  * The report API's hour fields are invoice (billable) hours. For accounts set
- * to actual hours, rebuild them from each time entry's `actual_hours` — every
+ * to actual hours (and MSA on-site tickets on any account), rebuild them from each time entry's `actual_hours` — every
  * hour an engineer logged, billable or not — so the table, sorting, totals,
  * export and detail dialog all read the same fields in either mode.
  * Period fields come from the `by_period` entries matching `periodLabel`.
@@ -329,6 +332,20 @@ function toActualHours(ticket: TicketRecord, periodLabel: string): TicketRecord 
   };
 }
 
+// Matches "13 - On-site Business Hours", "14 - Already Onsite", "32 - After Hours Onsite".
+const ONSITE_WORK_TYPE = /on-?\s?site/i;
+
+/** MSA tickets with on-site work always show actual hours, whatever the account's hour type. */
+function isMsaOnsite(ticket: TicketRecord): boolean {
+  return (ticket.hours_summary?.by_period ?? []).some((period) =>
+    period.entries.some((entry) => agreementBucket(entry.agreement) === "msa" && ONSITE_WORK_TYPE.test(entry.work_type ?? "")),
+  );
+}
+
+function effectiveHourType(ticket: TicketRecord, hourType: HourType): HourType {
+  return hourType === "actual_hours" || isMsaOnsite(ticket) ? "actual_hours" : "invoice_hours";
+}
+
 function HoursSummaryBar({ tickets, hourType }: { tickets: TicketRecord[]; hourType: HourType }) {
   const ssa = tickets.reduce((s, t) => s + (t["SSA Hours"] ?? 0), 0);
   const msa = tickets.reduce((s, t) => s + (t["MSA Hours"] ?? 0), 0);
@@ -338,7 +355,9 @@ function HoursSummaryBar({ tickets, hourType }: { tickets: TicketRecord[]; hourT
 
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">{hourType === "actual_hours" ? "Actual hours" : "Invoiced hours"}</span>
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+        {hourType === "actual_hours" ? "Actual hours" : "Invoiced hours · MSA on-site actual"}
+      </span>
       <span>
         <span className="text-muted-foreground">SSA </span>
         <strong>{ssa.toFixed(2)}h</strong>
@@ -433,19 +452,21 @@ function Field({ label, value, children, className }: { label: string; value?: s
   );
 }
 
-function TextBlock({ label, text }: { label: string; text: string }) {
+function TextSection({ value, label, text }: { value: string; label: string; text: string }) {
   return (
-    <div>
-      <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="whitespace-pre-wrap text-sm">{text}</p>
-    </div>
+    <AccordionItem value={value}>
+      <AccordionTrigger className="text-xs uppercase tracking-wide text-muted-foreground hover:no-underline">{label}</AccordionTrigger>
+      <AccordionContent>
+        <p className="whitespace-pre-wrap text-sm">{text}</p>
+      </AccordionContent>
+    </AccordionItem>
   );
 }
 
 // ─── Ticket detail content (shared by the dialog and any inline panel) ───────
 
 export function TicketDetailContent({
-  ticket,
+  ticket: rawTicket,
   periodLabel,
   hourType = "invoice_hours",
 }: {
@@ -453,8 +474,12 @@ export function TicketDetailContent({
   periodLabel: string;
   hourType?: HourType;
 }) {
+  const ticketHourType = effectiveHourType(rawTicket, hourType);
+  // toActualHours is idempotent, so tickets already converted by the table pass through unchanged.
+  const ticket = ticketHourType === "actual_hours" ? toActualHours(rawTicket, periodLabel) : rawTicket;
   // Actual hours already include non-billable time, so there's nothing "written off" to show.
-  const showWrittenOff = hourType === "invoice_hours";
+  const showWrittenOff = ticketHourType === "invoice_hours";
+  const hasText = Boolean(ticket.Summary || ticket.Detail || ticket.Resolution);
   return (
     <div className="grid gap-6">
       {/* Chips row — always visible */}
@@ -474,6 +499,11 @@ export function TicketDetailContent({
           {ticket["Sub Type"] && (
             <Badge variant="outline" className="text-xs font-normal">
               {ticket["Sub Type"]}
+            </Badge>
+          )}
+          {hourType === "invoice_hours" && ticketHourType === "actual_hours" && (
+            <Badge variant="outline" className="text-xs font-normal">
+              MSA on-site · actual hours
             </Badge>
           )}
         </div>
@@ -585,20 +615,20 @@ export function TicketDetailContent({
         </div>
 
         {/* Tabs below period hours */}
-        <Tabs defaultValue="summary" className="mt-1">
+        <Tabs defaultValue="summary" className="mt-1" onValueChange={(tab) => track("ticket_tab_view", { ticket_id: ticket["Ticket #"], tab: String(tab) })}>
           <TabsList>
             <TabsTrigger value="summary">Summary</TabsTrigger>
             <TabsTrigger value="billing">{showWrittenOff ? "Billing History" : "Hours History"}</TabsTrigger>
           </TabsList>
 
           {/* ── Summary tab ── */}
-          <TabsContent value="summary" className="mt-3 space-y-4 text-sm">
-            {ticket.Summary || ticket.Detail || ticket.Resolution ? (
-              <>
-                {ticket.Summary && <TextBlock label="Summary" text={ticket.Summary} />}
-                {ticket.Detail && <TextBlock label="Detail" text={ticket.Detail} />}
-                {ticket.Resolution && <TextBlock label="Resolution" text={ticket.Resolution} />}
-              </>
+          <TabsContent value="summary" className="mt-3 text-sm">
+            {hasText ? (
+              <Accordion multiple defaultValue={["summary"]} className="rounded-md border border-border px-3">
+                {ticket.Summary && <TextSection value="summary" label="Summary" text={ticket.Summary} />}
+                {ticket.Detail && <TextSection value="detail" label="Detail" text={ticket.Detail} />}
+                {ticket.Resolution && <TextSection value="resolution" label="Resolution" text={ticket.Resolution} />}
+              </Accordion>
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">No summary available for this ticket.</p>
             )}
@@ -671,13 +701,35 @@ export function TicketDetailDialog({
   onClose,
   periodLabel,
   hourType,
+  source,
 }: {
   ticket: TicketRecord;
   open: boolean;
   onClose: () => void;
   periodLabel: string;
   hourType?: HourType;
+  /** Where the dialog was opened from, for analytics. */
+  source: string;
 }) {
+  const ticketId = ticket["Ticket #"];
+
+  // One ticket_open per opening, and a ticket_close with how long it was viewed.
+  useEffect(() => {
+    if (!open) return;
+    const openedAt = Date.now();
+    track("ticket_open", {
+      ticket_id: ticketId,
+      summary: ticket.Summary,
+      status: ticket.Closed_Flag === 1 ? "closed" : "open",
+      priority: ticket["SLA Priority"],
+      source,
+      period: periodLabel,
+    });
+    return () => track("ticket_close", { ticket_id: ticketId, source, seconds_viewed: Math.round((Date.now() - openedAt) / 1000) });
+    // Only re-fire when a different ticket is opened, not on every re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ticketId]);
+
   return (
     <Dialog
       open={open}
@@ -745,6 +797,16 @@ const TABLE_COLUMNS: TableColDef[] = [
     exportType: "text",
     exportValue: (t) => t["Primary Contact"],
     exportWidth: 24,
+  },
+  {
+    key: "site",
+    label: "Site",
+    sortKey: "Site",
+    headerClass: "w-40",
+    renderCell: (t) => <span className="text-xs">{t.Site || "—"}</span>,
+    exportType: "text",
+    exportValue: (t) => t.Site,
+    exportWidth: 28,
   },
   {
     key: "board",
@@ -892,6 +954,7 @@ function ColumnsToggle({ columns, visible, onChange }: { columns: TableColDef[];
                 if (checked) next.delete(col.key);
                 else next.add(col.key);
                 onChange(next);
+                track("report_column_toggle", { column: col.label, visible: !checked });
               }}
             >
               <span
@@ -924,7 +987,7 @@ interface ReportTicketsTableProps {
 
 export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, companyName, hourType = "invoice_hours" }: ReportTicketsTableProps) {
   const tickets = useMemo(
-    () => (hourType === "actual_hours" ? rawTickets.map((t) => toActualHours(t, periodLabel)) : rawTickets),
+    () => rawTickets.map((t) => (effectiveHourType(t, hourType) === "actual_hours" ? toActualHours(t, periodLabel) : t)),
     [rawTickets, hourType, periodLabel],
   );
   // Written-off hours only mean something against invoiced hours.
@@ -950,11 +1013,10 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
   }, [activeTab, tickets, openTickets, closedTickets]);
 
   function handleSort(key: SortKey) {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
+    const dir: SortDir = sortKey === key && sortDir === "asc" ? "desc" : "asc";
+    setSortKey(key);
+    setSortDir(dir);
+    track("report_sort", { column: String(key), direction: dir });
   }
 
   const filtered = useMemo(() => {
@@ -994,6 +1056,23 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
 
   const visibleCols = columns.filter((c) => visibleColumns.has(c.key));
 
+  // Record what people search for once they stop typing, not every keystroke.
+  useEffect(() => {
+    if (!searchValue.trim() && !searchDate?.from) return;
+    const timer = setTimeout(() => {
+      track("report_search", {
+        column: searchColumn.header,
+        value: searchValue.trim() || undefined,
+        from: searchDate?.from?.toISOString().slice(0, 10),
+        to: searchDate?.to?.toISOString().slice(0, 10),
+        results: filtered.length,
+      });
+    }, 1000);
+    return () => clearTimeout(timer);
+    // filtered is derived from these; leaving it out avoids re-firing when tickets reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchValue, searchDate, searchColumn]);
+
   async function handleExport() {
     const safePeriod = periodLabel.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     const safeCompany = (companyName ?? "").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
@@ -1016,7 +1095,17 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
         })),
         rows: sorted.map((t) => Object.fromEntries(visibleCols.map((c) => [c.key, c.exportValue(t)]))),
       });
+      track("excel_export", {
+        company: companyName,
+        period: periodLabel,
+        tab: tabLabel ?? "All",
+        rows: sorted.length,
+        columns: visibleCols.map((c) => c.label).join(", "),
+        search_column: searchValue || searchDate?.from ? searchColumn.header : undefined,
+        search_value: searchValue || undefined,
+      });
     } catch (err) {
+      track("excel_export_failed", { company: companyName, period: periodLabel, error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : "Export failed. Please try again.");
     } finally {
       setExporting(false);
@@ -1024,7 +1113,13 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+    <Tabs
+      value={activeTab}
+      onValueChange={(v) => {
+        setActiveTab(v as typeof activeTab);
+        track("report_tab_change", { tab: String(v) });
+      }}
+    >
       <Card className="gap-0 overflow-hidden py-0">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -1113,7 +1208,7 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
         )}
       </Card>
 
-      {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel={periodLabel} hourType={hourType} />}
+      {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel={periodLabel} hourType={hourType} source="service_summary_report" />}
     </Tabs>
   );
 }

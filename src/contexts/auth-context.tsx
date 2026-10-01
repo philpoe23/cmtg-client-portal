@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/pocketbase/client";
 import { getCurrentUser, signOutServer } from "@/lib/server/auth";
+import { identify, track } from "@/lib/analytics";
 
 export interface User {
   id: string;
@@ -49,6 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
 
       if (currentUser) {
+        // Email as the distinct ID so sessions in Umami read as a person, not a hash.
+        identify(currentUser.email || currentUser.id, {
+          user_id: currentUser.id,
+          name: currentUser.name,
+          email: currentUser.email,
+          company: currentUser.accountName,
+        });
         setUser(currentUser);
         setIsAuthenticated(true);
       } else {
@@ -70,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = () => {
+    track("logout", { email: user?.email, company: user?.accountName });
     const pb = createClient();
     pb.authStore.clear();
     signingOutRef.current = true;
