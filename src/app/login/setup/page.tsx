@@ -4,18 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { track } from "@/lib/analytics";
-import { createClient } from "@/lib/pocketbase/client";
-import { completeAccountSetup, logout } from "./actions";
+import { setInitialPassword, logout } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClientResponseError } from "pocketbase";
 
 export default function SetupPage() {
   const router = useRouter();
 
-  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -32,39 +29,20 @@ export default function SetupPage() {
     }
     setLoading(true);
     try {
-      const pb = createClient();
-      const userId = pb.authStore.record?.id as string;
-
-      await pb.collection("portal_users").update(userId, {
-        password,
-        passwordConfirm: confirmPassword,
-        oldPassword: currentPassword,
-      });
-
-      // Re-authenticate with the new password so we have a fresh, valid token
-      // (changing the password invalidates the old one)
-      await pb.collection("portal_users").authWithPassword(pb.authStore.record?.email as string, password);
-
-      // Mark the account verified and persist the session server-side —
-      // document.cookie can't do that once the cookie is httpOnly.
-      const result = await completeAccountSetup(pb.authStore.token);
+      const result = await setInitialPassword(password, confirmPassword);
       if (!result.success) {
-        toast.error(result.error ?? "Failed to complete setup. Please try again.");
+        track("account_setup_failed", { error: result.error });
+        toast.error(result.error ?? "Failed to set password. Please try again.");
         return;
       }
 
-      track("account_setup_complete", { email: pb.authStore.record?.email as string | undefined });
+      track("account_setup_complete", { email: result.email });
       toast.success("Password set! Redirecting…");
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
       track("account_setup_failed", { error: err instanceof Error ? err.message : String(err) });
-      if (err instanceof ClientResponseError) {
-        console.error("Failed to set password:", err.response);
-        toast.error("Failed to set password — make sure your temporary password is correct and the new password meets the requirements.");
-      } else {
-        toast.error(err instanceof Error ? err.message : "Failed to set password");
-      }
+      toast.error("Failed to set password. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -85,17 +63,6 @@ export default function SetupPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSetPassword} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">Temporary Password</Label>
-                <Input
-                  id="currentPassword"
-                  type="password"
-                  autoComplete="current-password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="password">New Password</Label>
                 <Input id="password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
