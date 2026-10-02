@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { verifyTotpLogin } from "./actions";
+import { verifyTotpLogin, persistPasswordSession } from "./actions";
 import { logout } from "./mfa-setup/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +45,9 @@ export default function LoginPage() {
 
       // Enrollment runs inline from here on, and its server actions read auth
       // from the cookie, so this has to be written before the step changes.
-      document.cookie = pb.authStore.exportToCookie({ httpOnly: false, sameSite: "Lax" });
+      if (!(await persistPasswordSession(pb.authStore.token))) {
+        throw new Error("Couldn't start your session. Please try again.");
+      }
 
       if (pb.authStore.record?.verified) {
         // Verified but not enrolled: show enrollment in place rather than

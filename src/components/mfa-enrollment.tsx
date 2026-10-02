@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OtpInput } from "@/components/ui/otp-input";
+import { FormMessage, type FormMessageState } from "@/components/form-message";
 import { Loader2 } from "lucide-react";
 
 interface MfaEnrollmentProps {
@@ -33,29 +34,31 @@ export function MfaEnrollment({ onEnrolled, onLogout }: MfaEnrollmentProps) {
   const [loadingEnrollment, setLoadingEnrollment] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [message, setMessage] = useState<FormMessageState>(null);
 
   useEffect(() => {
     startTotpEnrollment()
       .then((result) => {
         if (!result) {
-          toast.error("Your session has expired. Please refresh and sign in again.");
+          setMessage({ type: "error", text: "Your session has expired. Please log out and sign in again." });
           return;
         }
         setQrCodeDataUrl(result.qrCodeDataUrl);
         setSecret(result.secret);
       })
-      .catch(() => toast.error("Failed to start setup. Please refresh and try again."))
+      .catch(() => setMessage({ type: "error", text: "Failed to start setup. Please refresh and try again." }))
       .finally(() => setLoadingEnrollment(false));
   }, []);
 
   async function handleConfirm(e: React.FormEvent) {
     e.preventDefault();
     setVerifying(true);
+    setMessage(null);
     try {
       const result = await confirmTotpEnrollment(code);
       if (!result.success) {
         track("mfa_enroll_failed", { error: result.error ?? "invalid_code" });
-        toast.error(result.error ?? "Invalid code. Please try again.");
+        setMessage({ type: "error", text: result.error ?? "Invalid code. Please try again." });
         setVerifying(false);
         return;
       }
@@ -69,7 +72,7 @@ export function MfaEnrollment({ onEnrolled, onLogout }: MfaEnrollmentProps) {
       toast.success("Two-factor authentication enabled!");
       onEnrolled();
     } catch {
-      toast.error("Failed to verify code. Please try again.");
+      setMessage({ type: "error", text: "Failed to verify code. Please try again." });
       setVerifying(false);
     }
   }
@@ -115,6 +118,7 @@ export function MfaEnrollment({ onEnrolled, onLogout }: MfaEnrollmentProps) {
                   <Label className="text-center block">Authenticator Code</Label>
                   <OtpInput value={code} onChange={setCode} disabled={verifying} />
                 </div>
+                <FormMessage message={message} />
                 <Button
                   type="submit"
                   size="lg"
@@ -126,7 +130,7 @@ export function MfaEnrollment({ onEnrolled, onLogout }: MfaEnrollmentProps) {
               </form>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Unable to load setup. Please refresh the page.</p>
+            <FormMessage message={message ?? { type: "error", text: "Unable to load setup. Please refresh the page." }} className="my-4" />
           )}
 
           {!redirecting && (

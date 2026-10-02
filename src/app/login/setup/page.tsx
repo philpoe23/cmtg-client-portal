@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { track } from "@/lib/analytics";
 import { setInitialPassword, logout } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormMessage, type FormMessageState } from "@/components/form-message";
 
 export default function SetupPage() {
   const router = useRouter();
@@ -16,33 +16,35 @@ export default function SetupPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<FormMessageState>(null);
 
   async function handleSetPassword(e: React.FormEvent) {
     e.preventDefault();
     if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
+      setMessage({ type: "error", text: "Passwords do not match." });
       return;
     }
     if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+      setMessage({ type: "error", text: "Password must be at least 8 characters." });
       return;
     }
     setLoading(true);
+    setMessage(null);
     try {
       const result = await setInitialPassword(password, confirmPassword);
       if (!result.success) {
         track("account_setup_failed", { error: result.error });
-        toast.error(result.error ?? "Failed to set password. Please try again.");
+        setMessage({ type: "error", text: result.error ?? "Failed to set password. Please try again." });
         return;
       }
 
       track("account_setup_complete", { email: result.email });
-      toast.success("Password set! Redirecting…");
+      setMessage({ type: "success", text: "Password set! Redirecting…" });
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
       track("account_setup_failed", { error: err instanceof Error ? err.message : String(err) });
-      toast.error("Failed to set password. Please try again.");
+      setMessage({ type: "error", text: "Failed to set password. Please try again." });
     } finally {
       setLoading(false);
     }
@@ -65,7 +67,10 @@ export default function SetupPage() {
             <form onSubmit={handleSetPassword} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="password">New Password</Label>
-                <Input id="password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <Input id="password" type="password" autoComplete="new-password" value={password} onChange={(e) => {
+                    setPassword(e.target.value);
+                    setMessage(null);
+                  }} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirm">Confirm Password</Label>
@@ -74,11 +79,15 @@ export default function SetupPage() {
                   type="password"
                   autoComplete="new-password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setMessage(null);
+                  }}
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <FormMessage message={message} />
+              <Button type="submit" className="w-full" disabled={loading || message?.type === "success"}>
                 {loading ? "Saving…" : "Set Password"}
               </Button>
               <Button

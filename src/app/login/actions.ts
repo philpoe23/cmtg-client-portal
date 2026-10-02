@@ -4,6 +4,32 @@ import PocketBase from "pocketbase";
 import { persistAuthCookie } from "@/lib/pocketbase/server";
 import { getServiceClient } from "@/lib/pocketbase/service";
 import { verifyTotpCode } from "@/lib/server/totp";
+import { recordLogin } from "@/lib/server/login-tracking";
+
+/**
+ * Persists the session from a password sign-in that still has to enrol in
+ * 2FA, so the enrollment server actions can read it.
+ *
+ * This used to be written from the browser with document.cookie, which fails
+ * silently in two cases: PocketBase's exportToCookie defaults to `Secure`
+ * (dropped on a plain-HTTP origin), and a leftover httpOnly cookie of the
+ * same name can't be overwritten from script. Either way the QR code never
+ * loaded. Setting it server-side avoids both.
+ */
+export async function persistPasswordSession(token: string): Promise<boolean> {
+  const userPb = new PocketBase(process.env.NEXT_PUBLIC_POCKETBASE_URL!);
+  userPb.authStore.save(token, null);
+  if (!userPb.authStore.isValid) return false;
+
+  try {
+    await userPb.collection("portal_users").authRefresh();
+  } catch {
+    return false;
+  }
+
+  await persistAuthCookie(userPb);
+  return true;
+}
 
 /**
  * Verifies a TOTP code for a user who just completed password auth.
@@ -37,5 +63,6 @@ export async function verifyTotpLogin(token: string, code: string): Promise<bool
   // can't do this once the cookie is httpOnly, which it already is for any
   // returning user after their first fully-authenticated request.
   await persistAuthCookie(userPb);
+  await recordLogin(userId);
   return true;
 }

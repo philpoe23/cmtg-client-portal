@@ -3,6 +3,7 @@
 import { createClient, persistAuthCookie, clearAuthCookie } from "@/lib/pocketbase/server";
 import { getServiceClient } from "@/lib/pocketbase/service";
 import { generateSecret, generateEnrollmentQrCode, verifyTotpCode } from "@/lib/server/totp";
+import { recordLogin } from "@/lib/server/login-tracking";
 
 interface EnrollmentStart {
   qrCodeDataUrl: string;
@@ -53,6 +54,7 @@ export async function confirmTotpEnrollment(code: string): Promise<{ success: bo
   // once the cookie is httpOnly, which it already is for any returning user.
   await pb.collection("portal_users").authRefresh();
   await persistAuthCookie(pb);
+  await recordLogin(userId, { activated: true });
 
   return { success: true };
 }
