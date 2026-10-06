@@ -1,4 +1,5 @@
 import type { ReportPreviewResponse, TicketRecord } from "@/types";
+import { isBoardAllowed, type BoardAccess } from "@/lib/server/portal-boards";
 
 const REPORT_API_URL = process.env.CW_REPORT_API_URL;
 
@@ -44,11 +45,12 @@ function transformTicket(raw: Record<string, any>): TicketRecord {
   };
 }
 
-export async function fetchReportPreview(company_name: string, start_date: string, end_date: string): Promise<ReportPreviewResponse> {
+/** `boards` is the account's board access (getBoardAccess): only tickets from those boards are returned. */
+export async function fetchReportPreview(company_name: string, start_date: string, end_date: string, boards: BoardAccess): Promise<ReportPreviewResponse> {
   const upstream = await fetch(`${REPORT_API_URL}/api/report/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ company_name, start_date, end_date }),
+    body: JSON.stringify({ company_name, start_date, end_date, ...(boards ? { board_ids: boards.ids } : {}) }),
   });
 
   const raw = await upstream.json().catch(() => ({}));
@@ -58,8 +60,14 @@ export async function fetchReportPreview(company_name: string, start_date: strin
   }
 
   const tickets: Record<string, unknown>[] = Array.isArray(raw.data) ? raw.data : [];
-  return {
-    total_tickets: raw.total_tickets ?? tickets.length,
-    data: tickets.map(transformTicket),
-  };
+  if (boards === null) {
+    return {
+      total_tickets: raw.total_tickets ?? tickets.length,
+      data: tickets.map(transformTicket),
+    };
+  }
+
+  // Also filtered here: the report API ignores board_ids until it supports the filter
+  const data = tickets.map(transformTicket).filter((t) => isBoardAllowed(boards, t.Board));
+  return { total_tickets: data.length, data };
 }

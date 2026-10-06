@@ -25,6 +25,7 @@ export const DEV_MOCK_ACCOUNT_USER: AccountUser = {
     company_name: "Dev Bypass",
     is_active: true,
     hour_type: "invoice_hours",
+    portal_boards: null,
     created_at: new Date().toISOString(),
   },
 };

@@ -49,11 +49,13 @@ export async function getTicket(cwCompanyRecid: number, ticketId: number, access
 export async function getCompanyTickets(
   companyId: number,
   accessToken: string,
-  params: { start_date?: string; end_date?: string } = {},
+  // boards: only tickets from these board IDs (see getBoardAccess); omit for every board
+  params: { start_date?: string; end_date?: string; boards?: number[] } = {},
 ): Promise<CompanyTicketsResponse> {
   const query = new URLSearchParams();
   if (params.start_date) query.set("start_date", params.start_date);
   if (params.end_date) query.set("end_date", params.end_date);
+  if (params.boards?.length) query.set("boards", params.boards.join(","));
   const qs = query.toString();
   const res = await fetch(`${TICKETS_API_URL}/api/companies/${companyId}/tickets${qs ? `?${qs}` : ""}`, {
     headers: authHeaders(accessToken),

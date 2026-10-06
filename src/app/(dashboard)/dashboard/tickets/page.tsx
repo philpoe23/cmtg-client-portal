@@ -3,6 +3,7 @@ import { createClient } from "@/lib/pocketbase/server";
 import { getAccountUser } from "@/lib/server/get-account";
 import { DEV_BYPASS } from "@/lib/dev-bypass";
 import { getCompanyTickets } from "@/lib/api/tickets";
+import { getBoardAccess, isBoardAllowed } from "@/lib/server/portal-boards";
 import { AllTicketsTable } from "@/components/portal/all-tickets-table";
 
 function formatDate(d: Date): string {
@@ -40,9 +41,15 @@ export default async function AllTicketsPage() {
   const startDate = formatDate(thirtyDaysAgo);
   const endDate = formatDate(today);
 
-  const result = await getCompanyTickets(cwCompanyRecid, accessToken, { start_date: startDate, end_date: endDate }).catch(() => null);
+  // A restricted account whose boards can't be looked up sees no tickets rather than every board's
+  const boards = await getBoardAccess(accountUser.accounts).catch(() => undefined);
+  const result =
+    boards === undefined
+      ? null
+      : await getCompanyTickets(cwCompanyRecid, accessToken, { start_date: startDate, end_date: endDate, boards: boards?.ids }).catch(() => null);
 
-  const tickets = result?.tickets ?? [];
+  // Also filtered here: the report API ignores `boards` until it supports the filter
+  const tickets = (result?.tickets ?? []).filter((t) => boards !== undefined && isBoardAllowed(boards, t.board));
 
   return (
     <div className="space-y-4">

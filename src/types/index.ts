@@ -153,6 +153,8 @@ export interface Account {
   company_name: string;
   is_active: boolean;
   hour_type: HourType;
+  /** ConnectWise board IDs this company sees tickets from; null = every board. */
+  portal_boards: number[] | null;
   created_at: string;
 }
 

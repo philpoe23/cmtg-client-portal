@@ -4,6 +4,7 @@ import { createClient } from "@/lib/pocketbase/server";
 import { getAccountUser } from "@/lib/server/get-account";
 import { DEV_BYPASS } from "@/lib/dev-bypass";
 import { getTicket } from "@/lib/api/tickets";
+import { getBoardAccess, isBoardAllowed } from "@/lib/server/portal-boards";
 import { TicketStatusBadge } from "@/components/portal/ticket-status-badge";
 import { TicketPriorityBadge } from "@/components/portal/ticket-priority-badge";
 import { Separator } from "@/components/ui/separator";
@@ -53,6 +54,10 @@ export default async function TicketDetailPage({ params }: TicketDetailPageProps
 
   const ticket = await getTicket(accountUser.accounts.cw_company_recid, ticketId, accessToken).catch(() => null);
   if (!ticket) notFound();
+
+  // Tickets from boards this company can't see are treated as missing
+  const boards = await getBoardAccess(accountUser.accounts).catch(() => undefined);
+  if (boards === undefined || !isBoardAllowed(boards, ticket.board_name)) notFound();
 
   return (
     <div className="space-y-6 max-w-4xl">

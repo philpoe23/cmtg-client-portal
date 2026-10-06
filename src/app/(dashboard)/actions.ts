@@ -1,6 +1,7 @@
 "use server";
 
 import { getAccountUser } from "@/lib/server/get-account";
+import { getBoardAccess } from "@/lib/server/portal-boards";
 import { fetchReportPreview } from "@/lib/server/report";
 import type { TicketRecord } from "@/types";
 
@@ -14,7 +15,9 @@ export async function fetchReportTicketsForRange(startDate: string, endDate: str
   const accountUser = await getAccountUser();
   if (!accountUser?.accounts) return [];
 
-  return fetchReportPreview(accountUser.accounts.company_name, startDate, endDate)
+  const { accounts } = accountUser;
+  return getBoardAccess(accounts)
+    .then((boards) => fetchReportPreview(accounts.company_name, startDate, endDate, boards))
     .then((result) => result.data)
     .catch(() => []);
 }
