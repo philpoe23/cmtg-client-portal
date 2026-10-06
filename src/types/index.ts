@@ -28,6 +28,8 @@ export interface HoursSummary {
 
 export interface TicketRecord {
   "Ticket #": number;
+  /** Set on child tickets; their SLA is governed by this parent. */
+  "Parent Ticket #": number | null;
   "Primary Contact": string;
   Site: string;
   "Created Date": string;

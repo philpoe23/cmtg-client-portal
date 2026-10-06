@@ -16,11 +16,12 @@ import { Separator } from "@/components/ui/separator";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
-import { ChevronUp, ChevronDown, ChevronsUpDown, Download, MapPin, Search, SlidersHorizontal, Check } from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, CornerDownRight, Download, MapPin, Search, SlidersHorizontal, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { downloadXlsx, type XlsxColumnType } from "@/lib/api/xlsx";
 import { track } from "@/lib/analytics";
+import ReportOverview from "@/components/portal/report-overview";
 import type { HourType, TicketRecord } from "@/types";
 
 type SortKey = keyof TicketRecord;
@@ -79,13 +80,15 @@ function SmartSearchBar({
     <div className="flex h-9 items-center overflow-hidden rounded-md border border-input bg-background shadow-xs transition-shadow focus-within:ring-[3px] focus-within:ring-ring/50">
       {/* Column picker */}
       <Popover>
-        <PopoverTrigger>
-          <Button variant="outline" size="sm" className="rounded-r-none border-r-0 gap-1 px-2.5 shrink-0 h-9">
-            <Search className="h-3.5 w-3.5" />
-            <span className="text-xs max-w-20 truncate">{searchColumn.header}</span>
-            <ChevronDown className="h-3 w-3 opacity-50" />
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger
+          render={
+            <Button variant="outline" size="sm" className="rounded-r-none border-r-0 gap-1 px-2.5 shrink-0 h-9">
+              <Search className="h-3.5 w-3.5" />
+              <span className="text-xs max-w-20 truncate">{searchColumn.header}</span>
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            </Button>
+          }
+        />
         <PopoverContent align="start" className="w-44 p-1 gap-1">
           {SEARCHABLE_COLUMNS.map((col) => (
             <button
@@ -150,6 +153,15 @@ function SmartSearchBar({
 }
 
 // ─── SLA helpers ─────────────────────────────────────────────────────────────
+
+/** Child tickets don't carry their own SLA -- it's governed by the parent ticket. */
+export function isChildTicket(ticket: TicketRecord): boolean {
+  return ticket["Parent Ticket #"] != null;
+}
+
+function ParentSlaNote({ ticket }: { ticket: TicketRecord }) {
+  return <span className="text-xs text-muted-foreground">Parent #{ticket["Parent Ticket #"]}</span>;
+}
 
 function getSlaMetCount(ticket: TicketRecord): number {
   return [ticket["SLA Response"], ticket["SLA Plan"], ticket["SLA Resolution"]].filter((v) => v === "Met").length;
@@ -529,6 +541,11 @@ export function TicketDetailContent({
           {/* SLA */}
           <div>
             <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">SLA</p>
+            {isChildTicket(ticket) ? (
+              <p className="text-sm text-muted-foreground">
+                Governed by parent ticket <span className="font-medium text-foreground">#{ticket["Parent Ticket #"]}</span>.
+              </p>
+            ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Field label="Attainment">
                 <SlaAttainmentBadge value={ticket["SLA Attainment"]} />
@@ -543,6 +560,7 @@ export function TicketDetailContent({
                 <SlaSubBadge value={ticket["SLA Resolution"]} />
               </Field>
             </div>
+            )}
           </div>
 
           <Separator />
@@ -833,18 +851,18 @@ const TABLE_COLUMNS: TableColDef[] = [
     label: "SLA",
     sortKey: "SLA Attainment",
     headerClass: "w-24",
-    renderCell: (t) => <SlaAttainmentBadge value={t["SLA Attainment"]} />,
+    renderCell: (t) => (isChildTicket(t) ? <ParentSlaNote ticket={t} /> : <SlaAttainmentBadge value={t["SLA Attainment"]} />),
     exportType: "text",
-    exportValue: (t) => t["SLA Attainment"],
+    exportValue: (t) => (isChildTicket(t) ? `Parent #${t["Parent Ticket #"]}` : t["SLA Attainment"]),
     exportWidth: 14,
   },
   {
     key: "slaStatus",
     label: "SLA Status",
     headerClass: "w-20",
-    renderCell: (t) => <SlaStatusChip ticket={t} />,
+    renderCell: (t) => (isChildTicket(t) ? <span className="text-xs text-muted-foreground">—</span> : <SlaStatusChip ticket={t} />),
     exportType: "text",
-    exportValue: (t) => `${getSlaMetCount(t)} met`,
+    exportValue: (t) => (isChildTicket(t) ? null : `${getSlaMetCount(t)} met`),
     exportWidth: 12,
     exportAlign: "center",
   },
@@ -1054,6 +1072,48 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
     });
   }, [filtered, sortKey, sortDir]);
 
+  // Nest child tickets under their parent when the parent is in the same result
+  // set. A child whose parent fell outside the period or the current filter stays
+  // top-level so it isn't hidden. Each group keeps the table's sort order.
+  const { topLevel, childrenOf } = useMemo(() => {
+    const ids = new Set(sorted.map((t) => t["Ticket #"]));
+    const childrenOf = new Map<number, TicketRecord[]>();
+    const topLevel: TicketRecord[] = [];
+    for (const t of sorted) {
+      const parent = t["Parent Ticket #"];
+      if (parent != null && parent !== t["Ticket #"] && ids.has(parent)) {
+        const list = childrenOf.get(parent);
+        if (list) list.push(t);
+        else childrenOf.set(parent, [t]);
+      } else {
+        topLevel.push(t);
+      }
+    }
+    return { topLevel, childrenOf };
+  }, [sorted]);
+
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+
+  function toggleExpanded(ticketId: number) {
+    const next = new Set(expanded);
+    const opening = !next.has(ticketId);
+    if (opening) next.add(ticketId);
+    else next.delete(ticketId);
+    setExpanded(next);
+    track("report_child_tickets_toggle", { ticket_id: ticketId, expanded: opening });
+  }
+
+  /** Parents followed by their children: the order rows appear in the table when fully expanded. */
+  const groupedRows = useMemo(() => {
+    const rows: { ticket: TicketRecord; depth: number }[] = [];
+    const visit = (t: TicketRecord, depth: number) => {
+      rows.push({ ticket: t, depth });
+      for (const child of childrenOf.get(t["Ticket #"]) ?? []) visit(child, depth + 1);
+    };
+    topLevel.forEach((t) => visit(t, 0));
+    return rows;
+  }, [topLevel, childrenOf]);
+
   const visibleCols = columns.filter((c) => visibleColumns.has(c.key));
 
   // Record what people search for once they stop typing, not every keystroke.
@@ -1093,7 +1153,7 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
           ...(c.exportAlign ? { align: c.exportAlign } : {}),
           ...(c.exportTotal ? { total: true } : {}),
         })),
-        rows: sorted.map((t) => Object.fromEntries(visibleCols.map((c) => [c.key, c.exportValue(t)]))),
+        rows: groupedRows.map(({ ticket: t }) => Object.fromEntries(visibleCols.map((c) => [c.key, c.exportValue(t)]))),
       });
       track("excel_export", {
         company: companyName,
@@ -1113,7 +1173,10 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
   }
 
   return (
+    <div className="min-w-0 space-y-4">
+    <ReportOverview tickets={tickets} periodLabel={periodLabel} hourType={hourType} />
     <Tabs
+      className="min-w-0"
       value={activeTab}
       onValueChange={(v) => {
         setActiveTab(v as typeof activeTab);
@@ -1186,22 +1249,57 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sorted.map((ticket, idx) => (
-                  <TableRow
-                    key={`${ticket["Ticket #"]}-${idx}`}
-                    className="cursor-pointer border-border transition-colors hover:bg-secondary/40"
-                    onClick={() => {
-                      setSelectedTicket(ticket);
-                      setDialogOpen(true);
-                    }}
-                  >
-                    {visibleCols.map((col) => (
-                      <TableCell key={col.key} className={cn("text-xs", col.cellClass)}>
-                        {col.renderCell(ticket)}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
+                {(function renderRows(list: TicketRecord[], depth: number): ReactNode[] {
+                  return list.flatMap((ticket, idx) => {
+                    const id = ticket["Ticket #"];
+                    const children = childrenOf.get(id) ?? [];
+                    const isOpen = expanded.has(id);
+                    const row = (
+                      <TableRow
+                        key={`${id}-${depth}-${idx}`}
+                        className={cn("cursor-pointer border-border transition-colors hover:bg-secondary/40", depth > 0 && "bg-muted/30")}
+                        onClick={() => {
+                          setSelectedTicket(ticket);
+                          setDialogOpen(true);
+                        }}
+                      >
+                        {visibleCols.map((col, colIdx) => (
+                          <TableCell key={col.key} className={cn("text-xs", col.cellClass)}>
+                            {colIdx === 0 ? (
+                              <span className="inline-flex items-center gap-1" style={{ paddingLeft: depth * 16 }}>
+                                {children.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    aria-expanded={isOpen}
+                                    aria-label={`${isOpen ? "Hide" : "Show"} ${children.length} child ticket${children.length === 1 ? "" : "s"} of #${id}`}
+                                    className="-ml-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleExpanded(id);
+                                    }}
+                                  >
+                                    <ChevronRight className={cn("size-3.5 transition-transform duration-200", isOpen && "rotate-90")} />
+                                  </button>
+                                ) : depth > 0 ? (
+                                  <CornerDownRight className="size-3 text-muted-foreground/60" aria-hidden />
+                                ) : null}
+                                {col.renderCell(ticket)}
+                                {children.length > 0 && (
+                                  <span className="rounded-full bg-muted px-1.5 py-px text-[10px] font-semibold tabular-nums text-muted-foreground" aria-hidden>
+                                    +{children.length}
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              col.renderCell(ticket)
+                            )}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                    return isOpen ? [row, ...renderRows(children, depth + 1)] : [row];
+                  });
+                })(topLevel, 0)}
               </TableBody>
             </Table>
           </div>
@@ -1210,5 +1308,6 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
 
       {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel={periodLabel} hourType={hourType} source="service_summary_report" />}
     </Tabs>
+    </div>
   );
 }

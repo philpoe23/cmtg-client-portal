@@ -35,6 +35,11 @@
   --cmtg-status-info-fg: #0a7171;
   --cmtg-status-neutral-bg: rgba(109, 129, 128, 0.12);
   --cmtg-status-neutral-fg: #3f5654;
+  /* Agreement-hours series (report overview). Validated for CVD separation and
+     contrast against the card surface; No Agreement uses --cmtg-muted as the residual. */
+  --cmtg-series-ssa: #008f9c;
+  --cmtg-series-msa: #c4861a;
+  --cmtg-series-dedicated: #7a5cc9;
 }
 
 @theme inline {
@@ -72,6 +77,9 @@
   --color-cmtg-status-info-fg: var(--cmtg-status-info-fg);
   --color-cmtg-status-neutral-bg: var(--cmtg-status-neutral-bg);
   --color-cmtg-status-neutral-fg: var(--cmtg-status-neutral-fg);
+  --color-cmtg-series-ssa: var(--cmtg-series-ssa);
+  --color-cmtg-series-msa: var(--cmtg-series-msa);
+  --color-cmtg-series-dedicated: var(--cmtg-series-dedicated);
 
   /* CMTG type scale — display/heading use Poppins (font-heading) */
   --text-cmtg-display: 2rem;
@@ -208,6 +216,9 @@
   --cmtg-status-info-fg: #8fdad9;
   --cmtg-status-neutral-bg: rgba(138, 160, 156, 0.18);
   --cmtg-status-neutral-fg: #b9c6c3;
+  --cmtg-series-ssa: #16a3ad;
+  --cmtg-series-msa: #bb861a;
+  --cmtg-series-dedicated: #9279e0;
 }
 
 @layer base {

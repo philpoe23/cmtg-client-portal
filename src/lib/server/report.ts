@@ -2,10 +2,19 @@ import type { ReportPreviewResponse, TicketRecord } from "@/types";
 
 const REPORT_API_URL = process.env.CW_REPORT_API_URL;
 
+/** Parent references arrive as numbers, numeric strings, or 0/"" for "no parent". */
+function toTicketNbr(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function transformTicket(raw: Record<string, any>): TicketRecord {
   return {
     "Ticket #": raw["Ticket #"] ?? raw.TicketNbr ?? raw.ticket_nbr ?? null,
+    "Parent Ticket #": toTicketNbr(
+      raw["Parent Ticket #"] ?? raw.Parent_TicketNbr ?? raw.parent_ticket_nbr ?? raw.Parent_Ticket ?? raw.parent_ticket ?? raw.parent_ticket_id ?? raw.parentTicketId,
+    ),
     "Primary Contact": raw["Primary Contact"] ?? raw.Contact_Name ?? raw.contact_name ?? "",
     Site: raw.Site ?? raw.Site_Name ?? raw.site_name ?? "",
     "Created Date": raw["Created Date"] ?? raw.Date_Entered ?? raw.date_entered ?? null,

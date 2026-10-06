@@ -14,7 +14,8 @@ interface MonthYearPickerProps {
   onChange?: (value: MonthYearValue) => void;
 }
 
-const YEARS_BACK = 4;
+// Earliest year with report data.
+const EARLIEST_YEAR = 2021;
 
 function monthLabel(month: number) {
   // Any year works -- only the month name is read off it.
@@ -28,7 +29,7 @@ export function MonthYearPicker({ value, onChange }: MonthYearPickerProps) {
     return {
       currentYear: y,
       currentMonth: now.getMonth() + 1,
-      years: Array.from({ length: YEARS_BACK + 1 }, (_, i) => y - i),
+      years: Array.from({ length: y - EARLIEST_YEAR + 1 }, (_, i) => y - i),
     };
   }, []);
 
