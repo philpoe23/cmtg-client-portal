@@ -1,9 +1,16 @@
 import type { ReportPreviewResponse, TicketRecord } from "@/types";
 import { isBoardAllowed, type BoardAccess } from "@/lib/server/portal-boards";
+import { isSiteAllowed } from "@/lib/server/portal-sites";
+
+/** What the signed-in company may see: from getBoardAccess and accounts.portal_sites. */
+export interface TicketAccess {
+  boards: BoardAccess;
+  sites: string[] | null;
+}
 
 const REPORT_API_URL = process.env.CW_REPORT_API_URL;
 
-/** Parent references arrive as numbers, numeric strings, or 0/"" for "no parent". */
+/** Parent references arrive as numbers (whole floats included), numeric strings, or null/0/"" for "no parent". */
 function toTicketNbr(value: unknown): number | null {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
@@ -14,7 +21,8 @@ function transformTicket(raw: Record<string, any>): TicketRecord {
   return {
     "Ticket #": raw["Ticket #"] ?? raw.TicketNbr ?? raw.ticket_nbr ?? null,
     "Parent Ticket #": toTicketNbr(
-      raw["Parent Ticket #"] ?? raw.Parent_TicketNbr ?? raw.parent_ticket_nbr ?? raw.Parent_Ticket ?? raw.parent_ticket ?? raw.parent_ticket_id ?? raw.parentTicketId,
+      // The report API sends the parent's ticket number as `Parent` (a float, e.g. 424561.0), null when there's none
+      raw["Parent Ticket #"] ?? raw.Parent ?? raw.Parent_TicketNbr ?? raw.parent_ticket_nbr ?? raw.Parent_Ticket ?? raw.parent_ticket ?? raw.parent_ticket_id ?? raw.parentTicketId,
     ),
     "Primary Contact": raw["Primary Contact"] ?? raw.Contact_Name ?? raw.contact_name ?? "",
     Site: raw.Site ?? raw.Site_Name ?? raw.site_name ?? "",
@@ -45,8 +53,9 @@ function transformTicket(raw: Record<string, any>): TicketRecord {
   };
 }
 
-/** `boards` is the account's board access (getBoardAccess): only tickets from those boards are returned. */
-export async function fetchReportPreview(company_name: string, start_date: string, end_date: string, boards: BoardAccess): Promise<ReportPreviewResponse> {
+/** Only tickets from the boards and sites in `access` are returned. */
+export async function fetchReportPreview(company_name: string, start_date: string, end_date: string, access: TicketAccess): Promise<ReportPreviewResponse> {
+  const { boards, sites } = access;
   const upstream = await fetch(`${REPORT_API_URL}/api/report/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -60,14 +69,15 @@ export async function fetchReportPreview(company_name: string, start_date: strin
   }
 
   const tickets: Record<string, unknown>[] = Array.isArray(raw.data) ? raw.data : [];
-  if (boards === null) {
+  if (boards === null && sites === null) {
     return {
       total_tickets: raw.total_tickets ?? tickets.length,
       data: tickets.map(transformTicket),
     };
   }
 
-  // Also filtered here: the report API ignores board_ids until it supports the filter
-  const data = tickets.map(transformTicket).filter((t) => isBoardAllowed(boards, t.Board));
+  // Boards are also filtered here because the report API ignores board_ids until it supports the
+  // filter; sites are only filtered here
+  const data = tickets.map(transformTicket).filter((t) => isBoardAllowed(boards, t.Board) && isSiteAllowed(sites, t.Site));
   return { total_tickets: data.length, data };
 }

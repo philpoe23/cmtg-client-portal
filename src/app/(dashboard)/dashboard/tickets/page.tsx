@@ -4,6 +4,7 @@ import { getAccountUser } from "@/lib/server/get-account";
 import { DEV_BYPASS } from "@/lib/dev-bypass";
 import { getCompanyTickets } from "@/lib/api/tickets";
 import { getBoardAccess, isBoardAllowed } from "@/lib/server/portal-boards";
+import { isSiteAllowed } from "@/lib/server/portal-sites";
 import { AllTicketsTable } from "@/components/portal/all-tickets-table";
 
 function formatDate(d: Date): string {
@@ -49,7 +50,9 @@ export default async function AllTicketsPage() {
       : await getCompanyTickets(cwCompanyRecid, accessToken, { start_date: startDate, end_date: endDate, boards: boards?.ids }).catch(() => null);
 
   // Also filtered here: the report API ignores `boards` until it supports the filter
-  const tickets = (result?.tickets ?? []).filter((t) => boards !== undefined && isBoardAllowed(boards, t.board));
+  // Rows don't carry a site yet, so a company limited to some sites sees none here until they do
+  const sites = accountUser.accounts.portal_sites;
+  const tickets = (result?.tickets ?? []).filter((t) => boards !== undefined && isBoardAllowed(boards, t.board) && isSiteAllowed(sites, t.site));
 
   return (
     <div className="space-y-4">

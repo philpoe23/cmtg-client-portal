@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { slaExclusion } from "@/lib/report-rules";
 import type { HourType, TicketRecord } from "@/types";
 
 // ─── Calculations ────────────────────────────────────────────────────────────
@@ -35,7 +36,13 @@ function formatHours(value: number): string {
 
 function summarise(tickets: TicketRecord[]) {
   // Child tickets inherit their parent's SLA, so counting them would double-count it.
-  const slaTickets = tickets.filter((t) => t["Parent Ticket #"] == null);
+  // Tickets with no time logged had no work done against the SLA.
+  const excluded = { child: 0, no_time: 0 };
+  const slaTickets = tickets.filter((t) => {
+    const reason = slaExclusion(t);
+    if (reason) excluded[reason]++;
+    return reason === null;
+  });
 
   const attainment = { met: 0, missed: 0, pending: 0 };
   for (const t of slaTickets) {
@@ -61,7 +68,8 @@ function summarise(tickets: TicketRecord[]) {
     total: tickets.length,
     open: tickets.filter((t) => t.Closed_Flag === 0).length,
     closed: tickets.filter((t) => t.Closed_Flag === 1).length,
-    children: tickets.length - slaTickets.length,
+    children: tickets.filter((t) => t["Parent Ticket #"] != null).length,
+    excluded,
     attainment,
     targets: [
       { label: "Response", ...target("SLA Response") },
@@ -115,6 +123,19 @@ function StackedBar({ segments, label, className }: { segments: Segment[]; label
 }
 
 // ─── Panels ──────────────────────────────────────────────────────────────────
+
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function SlaExclusionNote({ excluded }: { excluded: { child: number; no_time: number } }) {
+  const parts = [
+    excluded.child > 0 && `${plural(excluded.child, "child ticket", "child tickets")}, whose SLA is governed by the parent`,
+    excluded.no_time > 0 && `${plural(excluded.no_time, "ticket", "tickets")} with no time logged`,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return <p className="text-xs text-muted-foreground">Excludes {parts.join(", and ")}.</p>;
+}
 
 function SlaPanel({ data }: { data: ReturnType<typeof summarise> }) {
   const { met, missed, pending } = data.attainment;
@@ -199,11 +220,7 @@ function SlaPanel({ data }: { data: ReturnType<typeof summarise> }) {
         })}
       </dl>
 
-      {data.children > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Excludes {data.children} child {data.children === 1 ? "ticket" : "tickets"}, whose SLA is governed by the parent.
-        </p>
-      )}
+      <SlaExclusionNote excluded={data.excluded} />
     </section>
   );
 }
@@ -236,14 +253,12 @@ function HoursPanel({ data, hourType }: { data: ReturnType<typeof summarise>; ho
     },
     {
       key: "noAgreement",
-      label: "No Agreement",
+      label: "Project/Adhoc",
       value: noAgreement,
       fill: "bg-cmtg-muted",
       detail: `${formatHours(noAgreement)}h`,
     },
   ];
-  // No Agreement is the residual bucket: only list it when something landed there.
-  const listed = rows.filter((r) => r.key !== "noAgreement" || r.value > 0);
 
   return (
     <section aria-labelledby="overview-hours" className="flex flex-col gap-5 p-5 sm:p-6">
@@ -272,7 +287,7 @@ function HoursPanel({ data, hourType }: { data: ReturnType<typeof summarise>; ho
           </tr>
         </thead>
         <tbody>
-          {listed.map((r) => (
+          {rows.map((r) => (
             <tr key={r.key} className="border-b border-border/70 last:border-0">
               <th scope="row" className="py-2 text-left font-normal text-muted-foreground">
                 <span className="inline-flex items-center gap-2">

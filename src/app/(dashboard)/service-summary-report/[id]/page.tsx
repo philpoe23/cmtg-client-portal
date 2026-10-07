@@ -5,6 +5,7 @@ import { getAccountUser } from "@/lib/server/get-account";
 import { DEV_BYPASS } from "@/lib/dev-bypass";
 import { getTicket } from "@/lib/api/tickets";
 import { getBoardAccess, isBoardAllowed } from "@/lib/server/portal-boards";
+import { isSiteAllowed } from "@/lib/server/portal-sites";
 import { TicketStatusBadge } from "@/components/portal/ticket-status-badge";
 import { TicketPriorityBadge } from "@/components/portal/ticket-priority-badge";
 import { Separator } from "@/components/ui/separator";
@@ -59,9 +60,10 @@ export default async function TicketDetailPage({ params }: TicketDetailPageProps
     notFound();
   }
 
-  // Tickets from boards this company can't see are treated as missing
+  // Tickets from boards or sites this company can't see are treated as missing
   const boards = await getBoardAccess(accountUser.accounts).catch(() => undefined);
   if (boards === undefined || !isBoardAllowed(boards, ticket.board_name)) notFound();
+  if (!isSiteAllowed(accountUser.accounts.portal_sites, ticket.site_name)) notFound();
 
   return (
     <div className="space-y-6 max-w-4xl">

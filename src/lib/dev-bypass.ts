@@ -26,6 +26,7 @@ export const DEV_MOCK_ACCOUNT_USER: AccountUser = {
     is_active: true,
     hour_type: "invoice_hours",
     portal_boards: null,
+    portal_sites: null,
     created_at: new Date().toISOString(),
   },
 };

@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/pocketbase/server";
 import { DEV_BYPASS, DEV_MOCK_ACCOUNT_USER } from "@/lib/dev-bypass";
 import { normalizeBoardIds } from "@/lib/server/portal-boards";
+import { normalizeSiteNames } from "@/lib/server/portal-sites";
 import type { AccountUser, HourType } from "@/types";
 
 /**
@@ -64,6 +65,7 @@ export const getAccountUser = cache(async (): Promise<AccountUser | null> => {
       is_active: (account["is_active"] as boolean) ?? true,
       hour_type: toHourType(account["hour_type"]),
       portal_boards: normalizeBoardIds(account["portal_boards"]),
+      portal_sites: normalizeSiteNames(account["portal_sites"]),
       created_at: account["created"] as string,
     },
   };

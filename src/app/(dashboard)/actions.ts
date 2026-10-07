@@ -17,7 +17,7 @@ export async function fetchReportTicketsForRange(startDate: string, endDate: str
 
   const { accounts } = accountUser;
   return getBoardAccess(accounts)
-    .then((boards) => fetchReportPreview(accounts.company_name, startDate, endDate, boards))
+    .then((boards) => fetchReportPreview(accounts.company_name, startDate, endDate, { boards, sites: accounts.portal_sites }))
     .then((result) => result.data)
     .catch(() => []);
 }

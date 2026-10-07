@@ -66,6 +66,8 @@ export interface ReportPreviewResponse {
 
 export interface Ticket {
   id: number;
+  /** Not returned by the tickets API; needed to filter by site. */
+  site_name?: string | null;
   summary: string;
   status: string;
   priority: string;
@@ -128,6 +130,8 @@ export interface CompanyTicket {
   contact_name: string | null;
   status: string;
   board: string;
+  /** Not returned by the report API yet; needed to filter by site. */
+  site?: string | null;
   service_type: string | null;
   priority: string;
   date_entered: string;
@@ -155,6 +159,8 @@ export interface Account {
   hour_type: HourType;
   /** ConnectWise board IDs this company sees tickets from; null = every board. */
   portal_boards: number[] | null;
+  /** Names of the company's ConnectWise sites whose tickets it sees; null = every site. */
+  portal_sites: string[] | null;
   created_at: string;
 }
 

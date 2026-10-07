@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { downloadXlsx, type XlsxColumnType } from "@/lib/api/xlsx";
 import { track } from "@/lib/analytics";
+import { agreementBucket, applyDedicatedRule, isChildTicket, isOnsiteHelpdeskTicket, slaExclusion } from "@/lib/report-rules";
 import ReportOverview from "@/components/portal/report-overview";
 import type { HourType, TicketRecord } from "@/types";
 
@@ -154,13 +155,15 @@ function SmartSearchBar({
 
 // ─── SLA helpers ─────────────────────────────────────────────────────────────
 
-/** Child tickets don't carry their own SLA -- it's governed by the parent ticket. */
-export function isChildTicket(ticket: TicketRecord): boolean {
-  return ticket["Parent Ticket #"] != null;
+/** What the SLA cells show for a ticket left out of SLA figures (see slaExclusion). */
+function SlaExcludedNote({ ticket }: { ticket: TicketRecord }) {
+  return (
+    <span className="text-xs text-muted-foreground">{isChildTicket(ticket) ? `Parent #${ticket["Parent Ticket #"]}` : "No time logged"}</span>
+  );
 }
 
-function ParentSlaNote({ ticket }: { ticket: TicketRecord }) {
-  return <span className="text-xs text-muted-foreground">Parent #{ticket["Parent Ticket #"]}</span>;
+function slaExcludedLabel(ticket: TicketRecord): string {
+  return isChildTicket(ticket) ? `Parent #${ticket["Parent Ticket #"]}` : "No time logged";
 }
 
 function getSlaMetCount(ticket: TicketRecord): number {
@@ -297,16 +300,6 @@ function SlaStatusChip({ ticket }: { ticket: TicketRecord }) {
 
 // ─── Hour type ───────────────────────────────────────────────────────────────
 
-type AgreementBucket = "ssa" | "msa" | "dedicated" | "noAgreement";
-
-function agreementBucket(agreement: string | null | undefined): AgreementBucket {
-  const ag = (agreement ?? "").toLowerCase();
-  if (ag.includes("ssa")) return "ssa";
-  if (ag.includes("msa")) return "msa";
-  if (ag.includes("dedicated")) return "dedicated";
-  return "noAgreement";
-}
-
 /**
  * The report API's hour fields are invoice (billable) hours. For accounts set
  * to actual hours (and MSA on-site tickets on any account), rebuild them from each time entry's `actual_hours` — every
@@ -382,12 +375,10 @@ function HoursSummaryBar({ tickets, hourType }: { tickets: TicketRecord[]; hourT
         <span className="text-muted-foreground">Dedicated Resource </span>
         <strong>{dedicated.toFixed(2)}h</strong>
       </span>
-      {noAgreement > 0 && (
-        <span>
-          <span className="text-muted-foreground">No Agreement </span>
-          <strong>{noAgreement.toFixed(2)}h</strong>
-        </span>
-      )}
+      <span>
+        <span className="text-muted-foreground">Project/Adhoc </span>
+        <strong>{noAgreement.toFixed(2)}h</strong>
+      </span>
       <Separator orientation="vertical" className="hidden h-4 sm:block" />
       <span>
         <span className="text-muted-foreground">Total </span>
@@ -422,6 +413,13 @@ function toIsoDate(value: string | null | undefined): string | null {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// ─── Table sizing ────────────────────────────────────────────────────────────
+
+// Headers and cells wrap (the table primitives default to nowrap) so all columns fit the page
+// width; the table only scrolls sideways when the screen is too narrow even for that.
+const HEAD_CLASS = "h-auto px-1.5 py-2 align-bottom text-xs whitespace-normal normal-case tracking-normal";
+const CELL_CLASS = "px-1.5 text-xs whitespace-normal break-words";
+
 // ─── Sortable header ─────────────────────────────────────────────────────────
 
 interface SortableHeaderProps {
@@ -436,8 +434,8 @@ interface SortableHeaderProps {
 function SortableHeader({ label, sortKey, currentSort, currentDir, onSort, className }: SortableHeaderProps) {
   const isActive = currentSort === sortKey;
   return (
-    <TableHead className={cn("cursor-pointer select-none whitespace-nowrap text-xs", className)} onClick={() => onSort(sortKey)}>
-      <span className="inline-flex items-center gap-1">
+    <TableHead className={cn("cursor-pointer select-none", HEAD_CLASS, className)} onClick={() => onSort(sortKey)}>
+      <span className="inline-flex items-end gap-1 [&>svg]:mb-px [&>svg]:shrink-0">
         {label}
         {isActive ? (
           currentDir === "asc" ? (
@@ -477,18 +475,68 @@ function TextSection({ value, label, text }: { value: string; label: string; tex
 
 // ─── Ticket detail content (shared by the dialog and any inline panel) ───────
 
+/** A parent ticket's children, each opening in the same dialog. */
+function ChildTicketsSection({ tickets, onOpenTicket }: { tickets: TicketRecord[]; onOpenTicket?: (ticket: TicketRecord) => void }) {
+  return (
+    <Accordion className="rounded-md border border-border px-3">
+      <AccordionItem value="children">
+        <AccordionTrigger className="text-xs uppercase tracking-wide text-muted-foreground hover:no-underline">
+          Child tickets ({tickets.length})
+        </AccordionTrigger>
+        <AccordionContent>
+          <ul className="divide-y divide-border">
+            {tickets.map((child) => (
+              <li key={child["Ticket #"]}>
+                <button
+                  type="button"
+                  disabled={!onOpenTicket}
+                  onClick={() => onOpenTicket?.(child)}
+                  className="flex w-full items-center gap-3 rounded px-1 py-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:hover:bg-transparent"
+                >
+                  <CornerDownRight className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
+                  <span className="font-mono text-xs text-muted-foreground">#{child["Ticket #"]}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{child.Summary || "No summary"}</span>
+                  <StatusChip closed={child.Closed_Flag === 1} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+
+function ChildTag({ ticket }: { ticket: TicketRecord }) {
+  return (
+    <Badge variant="info" className="gap-1">
+      <CornerDownRight className="size-3" aria-hidden />
+      Child ticket of #{ticket["Parent Ticket #"]}
+    </Badge>
+  );
+}
+
 export function TicketDetailContent({
   ticket: rawTicket,
   periodLabel,
   hourType = "invoice_hours",
+  childTickets = [],
+  parentTicket,
+  onOpenTicket,
 }: {
   ticket: TicketRecord;
   periodLabel: string;
   hourType?: HourType;
+  /** This ticket's child tickets in the same report, listed under it. */
+  childTickets?: TicketRecord[];
+  /** The parent ticket, when it's in the same report, so the child tag can open it. */
+  parentTicket?: TicketRecord;
+  onOpenTicket?: (ticket: TicketRecord) => void;
 }) {
   const ticketHourType = effectiveHourType(rawTicket, hourType);
-  // toActualHours is idempotent, so tickets already converted by the table pass through unchanged.
-  const ticket = ticketHourType === "actual_hours" ? toActualHours(rawTicket, periodLabel) : rawTicket;
+  // toActualHours and applyDedicatedRule are idempotent, so tickets already converted by the table pass through unchanged.
+  const ticket = applyDedicatedRule(ticketHourType === "actual_hours" ? toActualHours(rawTicket, periodLabel) : rawTicket);
+  const exclusion = slaExclusion(ticket);
   // Actual hours already include non-billable time, so there's nothing "written off" to show.
   const showWrittenOff = ticketHourType === "invoice_hours";
   const hasText = Boolean(ticket.Summary || ticket.Detail || ticket.Resolution);
@@ -496,6 +544,24 @@ export function TicketDetailContent({
     <div className="grid gap-6">
       {/* Chips row — always visible */}
         <div className="flex flex-wrap gap-2">
+          {isChildTicket(ticket) &&
+            (parentTicket && onOpenTicket ? (
+              <button
+                type="button"
+                onClick={() => onOpenTicket(parentTicket)}
+                className="rounded-4xl hover:opacity-80 focus-visible:outline-2 focus-visible:outline-ring"
+                aria-label={`Open parent ticket #${ticket["Parent Ticket #"]}`}
+              >
+                <ChildTag ticket={ticket} />
+              </button>
+            ) : (
+              <ChildTag ticket={ticket} />
+            ))}
+          {childTickets.length > 0 && (
+            <Badge variant="neutral">
+              Parent of {childTickets.length} child {childTickets.length === 1 ? "ticket" : "tickets"}
+            </Badge>
+          )}
           <StatusChip closed={ticket.Closed_Flag === 1} />
           <PriorityChip value={ticket["SLA Priority"]} />
           {ticket.Board && (
@@ -541,10 +607,12 @@ export function TicketDetailContent({
           {/* SLA */}
           <div>
             <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">SLA</p>
-            {isChildTicket(ticket) ? (
+            {exclusion === "child" ? (
               <p className="text-sm text-muted-foreground">
                 Governed by parent ticket <span className="font-medium text-foreground">#{ticket["Parent Ticket #"]}</span>.
               </p>
+            ) : exclusion === "no_time" ? (
+              <p className="text-sm text-muted-foreground">Not counted towards SLA: no time has been logged on this ticket.</p>
             ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Field label="Attainment">
@@ -572,7 +640,7 @@ export function TicketDetailContent({
               <Field label="SSA" value={(ticket["SSA Hours"] ?? 0).toFixed(2)} />
               <Field label="MSA" value={(ticket["MSA Hours"] ?? 0).toFixed(2)} />
               <Field label="Dedicated" value={(ticket["Dedicated Resource Hours"] ?? 0).toFixed(2)} />
-              <Field label="No Agreement" value={(ticket["No Agreement Hours"] ?? 0).toFixed(2)} />
+              <Field label="Project/Adhoc" value={(ticket["No Agreement Hours"] ?? 0).toFixed(2)} />
               {showWrittenOff && (
                 <Field label="Written Off">
                   {(() => {
@@ -601,13 +669,19 @@ export function TicketDetailContent({
                       hours[agreementBucket(entry.agreement)] += Number(entry.billable_hours) || 0;
                     }
                   }
+                  // Same rule as the period hours: an Onsite Helpdesk ticket's non-SSA hours are Dedicated
+                  if (isOnsiteHelpdeskTicket(ticket)) {
+                    hours.dedicated += hours.msa + hours.noAgreement;
+                    hours.msa = 0;
+                    hours.noAgreement = 0;
+                  }
                   const total = Number(ticket.hours_summary!.total_hours) || 0;
                   return (
                     <>
                       <Field label="SSA" value={hours.ssa.toFixed(2)} />
                       <Field label="MSA" value={hours.msa.toFixed(2)} />
                       <Field label="Dedicated" value={hours.dedicated.toFixed(2)} />
-                      <Field label="No Agreement" value={hours.noAgreement.toFixed(2)} />
+                      <Field label="Project/Adhoc" value={hours.noAgreement.toFixed(2)} />
                       {showWrittenOff && (
                         <Field label="Written Off">
                           <p
@@ -631,6 +705,8 @@ export function TicketDetailContent({
             )}
           </div>
         </div>
+
+        {childTickets.length > 0 && <ChildTicketsSection tickets={childTickets} onOpenTicket={onOpenTicket} />}
 
         {/* Tabs below period hours */}
         <Tabs defaultValue="summary" className="mt-1" onValueChange={(tab) => track("ticket_tab_view", { ticket_id: ticket["Ticket #"], tab: String(tab) })}>
@@ -720,6 +796,9 @@ export function TicketDetailDialog({
   periodLabel,
   hourType,
   source,
+  childTickets,
+  parentTicket,
+  onOpenTicket,
 }: {
   ticket: TicketRecord;
   open: boolean;
@@ -728,6 +807,9 @@ export function TicketDetailDialog({
   hourType?: HourType;
   /** Where the dialog was opened from, for analytics. */
   source: string;
+  childTickets?: TicketRecord[];
+  parentTicket?: TicketRecord;
+  onOpenTicket?: (ticket: TicketRecord) => void;
 }) {
   const ticketId = ticket["Ticket #"];
 
@@ -760,7 +842,14 @@ export function TicketDetailDialog({
           <DialogTitle>Ticket #{ticket["Ticket #"]}</DialogTitle>
           <DialogDescription className="sr-only">{ticket.Summary || "Ticket detail"}</DialogDescription>
         </DialogHeader>
-        <TicketDetailContent ticket={ticket} periodLabel={periodLabel} hourType={hourType} />
+        <TicketDetailContent
+          ticket={ticket}
+          periodLabel={periodLabel}
+          hourType={hourType}
+          childTickets={childTickets}
+          parentTicket={parentTicket}
+          onOpenTicket={onOpenTicket}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -775,6 +864,8 @@ interface TableColDef {
   headerClass?: string;
   cellClass?: string;
   alwaysVisible?: boolean;
+  /** Off until the viewer turns it on from the Columns menu. */
+  hiddenByDefault?: boolean;
   renderCell: (ticket: TicketRecord) => ReactNode;
   /** Export metadata — kept beside renderCell so the workbook can't drift from the table. */
   exportType: XlsxColumnType;
@@ -789,7 +880,6 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "ticket",
     label: "Ticket #",
     sortKey: "Ticket #",
-    headerClass: "w-20",
     alwaysVisible: true,
     renderCell: (t) => <span className="font-mono text-xs text-muted-foreground">{t["Ticket #"]}</span>,
     exportType: "number",
@@ -801,7 +891,6 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "created",
     label: "Created",
     sortKey: "Created Date",
-    headerClass: "w-28",
     renderCell: (t) => <span className="text-xs">{formatDate(t["Created Date"])}</span>,
     exportType: "date",
     exportValue: (t) => toIsoDate(t["Created Date"]),
@@ -810,7 +899,6 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "contact",
     label: "Contact",
     sortKey: "Primary Contact",
-    headerClass: "w-36",
     renderCell: (t) => <span className="text-xs">{t["Primary Contact"]}</span>,
     exportType: "text",
     exportValue: (t) => t["Primary Contact"],
@@ -820,7 +908,6 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "site",
     label: "Site",
     sortKey: "Site",
-    headerClass: "w-40",
     renderCell: (t) => <span className="text-xs">{t.Site || "—"}</span>,
     exportType: "text",
     exportValue: (t) => t.Site,
@@ -830,7 +917,6 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "board",
     label: "Board",
     sortKey: "Board",
-    headerClass: "w-32",
     renderCell: (t) => <span className="text-xs">{t.Board}</span>,
     exportType: "text",
     exportValue: (t) => t.Board,
@@ -840,7 +926,7 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "type",
     label: "Type",
     sortKey: "Ticket Type",
-    headerClass: "w-24",
+    hiddenByDefault: true,
     renderCell: (t) => <span className="text-xs text-muted-foreground">{t["Ticket Type"] || "—"}</span>,
     exportType: "text",
     exportValue: (t) => t["Ticket Type"],
@@ -850,19 +936,17 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "sla",
     label: "SLA",
     sortKey: "SLA Attainment",
-    headerClass: "w-24",
-    renderCell: (t) => (isChildTicket(t) ? <ParentSlaNote ticket={t} /> : <SlaAttainmentBadge value={t["SLA Attainment"]} />),
+    renderCell: (t) => (slaExclusion(t) ? <SlaExcludedNote ticket={t} /> : <SlaAttainmentBadge value={t["SLA Attainment"]} />),
     exportType: "text",
-    exportValue: (t) => (isChildTicket(t) ? `Parent #${t["Parent Ticket #"]}` : t["SLA Attainment"]),
+    exportValue: (t) => (slaExclusion(t) ? slaExcludedLabel(t) : t["SLA Attainment"]),
     exportWidth: 14,
   },
   {
     key: "slaStatus",
     label: "SLA Status",
-    headerClass: "w-20",
-    renderCell: (t) => (isChildTicket(t) ? <span className="text-xs text-muted-foreground">—</span> : <SlaStatusChip ticket={t} />),
+    renderCell: (t) => (slaExclusion(t) ? <span className="text-xs text-muted-foreground">—</span> : <SlaStatusChip ticket={t} />),
     exportType: "text",
-    exportValue: (t) => (isChildTicket(t) ? null : `${getSlaMetCount(t)} met`),
+    exportValue: (t) => (slaExclusion(t) ? null : `${getSlaMetCount(t)} met`),
     exportWidth: 12,
     exportAlign: "center",
   },
@@ -870,7 +954,6 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "techs",
     label: "Techs",
     sortKey: "Techs Worked",
-    headerClass: "w-40",
     renderCell: (t) => <span className="text-xs">{t["Techs Worked"] || "—"}</span>,
     exportType: "text",
     exportValue: (t) => t["Techs Worked"],
@@ -880,8 +963,8 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "ssa",
     label: "SSA",
     sortKey: "SSA Hours",
-    headerClass: "w-16 text-right",
-    cellClass: "text-right",
+    headerClass: "text-right",
+    cellClass: "text-right whitespace-nowrap",
     renderCell: (t) => <span className="text-xs">{(t["SSA Hours"] ?? 0) > 0 ? t["SSA Hours"]!.toFixed(2) : "—"}</span>,
     exportType: "hours",
     exportValue: (t) => t["SSA Hours"] ?? 0,
@@ -891,8 +974,8 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "msa",
     label: "MSA",
     sortKey: "MSA Hours",
-    headerClass: "w-16 text-right",
-    cellClass: "text-right",
+    headerClass: "text-right",
+    cellClass: "text-right whitespace-nowrap",
     renderCell: (t) => <span className="text-xs">{(t["MSA Hours"] ?? 0) > 0 ? t["MSA Hours"]!.toFixed(2) : "—"}</span>,
     exportType: "hours",
     exportValue: (t) => t["MSA Hours"] ?? 0,
@@ -902,18 +985,30 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "dedicated",
     label: "Dedicated",
     sortKey: "Dedicated Resource Hours",
-    headerClass: "w-20 text-right",
-    cellClass: "text-right",
+    headerClass: "text-right",
+    cellClass: "text-right whitespace-nowrap",
     renderCell: (t) => <span className="text-xs">{(t["Dedicated Resource Hours"] ?? 0) > 0 ? t["Dedicated Resource Hours"]!.toFixed(2) : "—"}</span>,
     exportType: "hours",
     exportValue: (t) => t["Dedicated Resource Hours"] ?? 0,
     exportTotal: true,
   },
   {
+    // Time not covered by an SSA, MSA or dedicated agreement
+    key: "adhoc",
+    label: "Project/Adhoc",
+    sortKey: "No Agreement Hours",
+    headerClass: "text-right",
+    cellClass: "text-right whitespace-nowrap",
+    renderCell: (t) => <span className="text-xs">{(t["No Agreement Hours"] ?? 0) > 0 ? t["No Agreement Hours"]!.toFixed(2) : "—"}</span>,
+    exportType: "hours",
+    exportValue: (t) => t["No Agreement Hours"] ?? 0,
+    exportTotal: true,
+  },
+  {
     key: "agreement",
     label: "Agreement",
     sortKey: "Agreements Used",
-    headerClass: "w-40",
+    hiddenByDefault: true,
     renderCell: (t) => <span className="text-xs">{t["Agreements Used"] || "—"}</span>,
     exportType: "text",
     exportValue: (t) => t["Agreements Used"],
@@ -923,8 +1018,8 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "wo",
     label: "W/O",
     sortKey: "Written Off / Non-Billable Hours",
-    headerClass: "w-16 text-right",
-    cellClass: "text-right",
+    headerClass: "text-right",
+    cellClass: "text-right whitespace-nowrap",
     renderCell: (t) => {
       const v = t["Written Off / Non-Billable Hours"] ?? 0;
       return <span className="text-xs">{v > 0 ? v.toFixed(2) : "—"}</span>;
@@ -937,8 +1032,8 @@ const TABLE_COLUMNS: TableColDef[] = [
     key: "total",
     label: "Total",
     sortKey: "Total Hours",
-    headerClass: "w-20 text-right",
-    cellClass: "text-right",
+    headerClass: "text-right",
+    cellClass: "text-right whitespace-nowrap",
     alwaysVisible: true,
     renderCell: (t) => <span className="text-xs font-medium">{Number(t.hours_summary?.total_hours ?? t["Total Hours"] ?? 0).toFixed(2)}</span>,
     exportType: "hours",
@@ -1005,7 +1100,7 @@ interface ReportTicketsTableProps {
 
 export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, companyName, hourType = "invoice_hours" }: ReportTicketsTableProps) {
   const tickets = useMemo(
-    () => rawTickets.map((t) => (effectiveHourType(t, hourType) === "actual_hours" ? toActualHours(t, periodLabel) : t)),
+    () => rawTickets.map((t) => applyDedicatedRule(effectiveHourType(t, hourType) === "actual_hours" ? toActualHours(t, periodLabel) : t)),
     [rawTickets, hourType, periodLabel],
   );
   // Written-off hours only mean something against invoiced hours.
@@ -1016,7 +1111,7 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
   const [searchColumn, setSearchColumn] = useState<ColumnDef>(SEARCHABLE_COLUMNS[0]);
   const [searchValue, setSearchValue] = useState("");
   const [searchDate, setSearchDate] = useState<DateRange | undefined>();
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(TABLE_COLUMNS.map((c) => c.key)));
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(TABLE_COLUMNS.filter((c) => !c.hiddenByDefault).map((c) => c.key)));
   const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -1091,6 +1186,20 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
     }
     return { topLevel, childrenOf };
   }, [sorted]);
+
+  // For the dialog: parents and children across the whole report, whatever the current filter
+  const { ticketsById, allChildrenOf } = useMemo(() => {
+    const ticketsById = new Map(tickets.map((t) => [t["Ticket #"], t]));
+    const allChildrenOf = new Map<number, TicketRecord[]>();
+    for (const t of tickets) {
+      const parent = t["Parent Ticket #"];
+      if (parent == null || parent === t["Ticket #"]) continue;
+      const list = allChildrenOf.get(parent);
+      if (list) list.push(t);
+      else allChildrenOf.set(parent, [t]);
+    }
+    return { ticketsById, allChildrenOf };
+  }, [tickets]);
 
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
 
@@ -1241,7 +1350,7 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
                         className={col.headerClass}
                       />
                     ) : (
-                      <TableHead key={col.key} className={cn("text-xs", col.headerClass)}>
+                      <TableHead key={col.key} className={cn(HEAD_CLASS, col.headerClass)}>
                         {col.label}
                       </TableHead>
                     ),
@@ -1264,7 +1373,7 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
                         }}
                       >
                         {visibleCols.map((col, colIdx) => (
-                          <TableCell key={col.key} className={cn("text-xs", col.cellClass)}>
+                          <TableCell key={col.key} className={cn(CELL_CLASS, col.cellClass)}>
                             {colIdx === 0 ? (
                               <span className="inline-flex items-center gap-1" style={{ paddingLeft: depth * 16 }}>
                                 {children.length > 0 ? (
@@ -1306,7 +1415,19 @@ export default function ReportTicketsTable({ tickets: rawTickets, periodLabel, c
         )}
       </Card>
 
-      {selectedTicket && <TicketDetailDialog ticket={selectedTicket} open={dialogOpen} onClose={() => setDialogOpen(false)} periodLabel={periodLabel} hourType={hourType} source="service_summary_report" />}
+      {selectedTicket && (
+        <TicketDetailDialog
+          ticket={selectedTicket}
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          periodLabel={periodLabel}
+          hourType={hourType}
+          source="service_summary_report"
+          childTickets={allChildrenOf.get(selectedTicket["Ticket #"])}
+          parentTicket={selectedTicket["Parent Ticket #"] != null ? ticketsById.get(selectedTicket["Parent Ticket #"]) : undefined}
+          onOpenTicket={setSelectedTicket}
+        />
+      )}
     </Tabs>
     </div>
   );
