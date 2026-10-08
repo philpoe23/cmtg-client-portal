@@ -37,19 +37,7 @@ function formatHours(value: number): string {
 function summarise(tickets: TicketRecord[]) {
   // Child tickets inherit their parent's SLA, so counting them would double-count it.
   // Tickets with no time logged had no work done against the SLA.
-  const excluded = { child: 0, no_time: 0 };
-  const slaTickets = tickets.filter((t) => {
-    const reason = slaExclusion(t);
-    if (reason) excluded[reason]++;
-    return reason === null;
-  });
-
-  const attainment = { met: 0, missed: 0, pending: 0 };
-  for (const t of slaTickets) {
-    if (t["SLA Attainment"] === "Met") attainment.met++;
-    else if (t["SLA Attainment"] === "Missed") attainment.missed++;
-    else attainment.pending++;
-  }
+  const slaTickets = tickets.filter((t) => slaExclusion(t) === null);
 
   const target = (key: "SLA Response" | "SLA Plan" | "SLA Resolution"): Rate => {
     let met = 0;
@@ -69,8 +57,6 @@ function summarise(tickets: TicketRecord[]) {
     open: tickets.filter((t) => t.Closed_Flag === 0).length,
     closed: tickets.filter((t) => t.Closed_Flag === 1).length,
     children: tickets.filter((t) => t["Parent Ticket #"] != null).length,
-    excluded,
-    attainment,
     targets: [
       { label: "Response", ...target("SLA Response") },
       { label: "Plan", ...target("SLA Plan") },
@@ -124,22 +110,12 @@ function StackedBar({ segments, label, className }: { segments: Segment[]; label
 
 // ─── Panels ──────────────────────────────────────────────────────────────────
 
-function plural(n: number, one: string, many: string) {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
-function SlaExclusionNote({ excluded }: { excluded: { child: number; no_time: number } }) {
-  const parts = [
-    excluded.child > 0 && `${plural(excluded.child, "child ticket", "child tickets")}, whose SLA is governed by the parent`,
-    excluded.no_time > 0 && `${plural(excluded.no_time, "ticket", "tickets")} with no time logged`,
-  ].filter(Boolean);
-  if (parts.length === 0) return null;
-  return <p className="text-xs text-muted-foreground">Excludes {parts.join(", and ")}.</p>;
-}
-
 function SlaPanel({ data }: { data: ReturnType<typeof summarise> }) {
-  const { met, missed, pending } = data.attainment;
-  const decided = met + missed;
+  // The headline accumulates every decided Response, Plan and Resolution target,
+  // so it is the average of the three weighted by how many outcomes each has.
+  const met = data.targets.reduce((s, t) => s + t.met, 0);
+  const decided = data.targets.reduce((s, t) => s + t.decided, 0);
+  const missed = decided - met;
   const pct = rate(met, decided);
 
   return (
@@ -154,30 +130,30 @@ function SlaPanel({ data }: { data: ReturnType<typeof summarise> }) {
           <p className="text-sm text-muted-foreground">
             {decided > 0 ? (
               <>
-                <span className="font-medium text-foreground tabular-nums">{met}</span> of <span className="tabular-nums">{decided}</span> met
+                <span className="font-medium text-foreground tabular-nums">{met}</span> of <span className="tabular-nums">{decided}</span> targets met
               </>
             ) : (
-              "No SLA outcomes yet"
+              "No SLA targets reached yet"
             )}
           </p>
         </div>
 
         <StackedBar
-          label="SLA outcomes"
+          label="SLA targets"
           segments={[
             {
               key: "met",
               label: "Met",
               value: met,
               fill: "bg-cmtg-bright-green dark:bg-cmtg-status-resolved-fg",
-              detail: `${met} tickets`,
+              detail: `${met} targets`,
             },
             {
               key: "missed",
               label: "Missed",
               value: missed,
               fill: "bg-cmtg-brick dark:bg-cmtg-status-critical-fg",
-              detail: `${missed} tickets`,
+              detail: `${missed} targets`,
             },
           ]}
         />
@@ -191,12 +167,6 @@ function SlaPanel({ data }: { data: ReturnType<typeof summarise> }) {
             <span className="size-2 rounded-full bg-cmtg-brick dark:bg-cmtg-status-critical-fg" aria-hidden />
             Missed <span className="font-medium text-foreground tabular-nums">{missed}</span>
           </li>
-          {pending > 0 && (
-            <li className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-full border border-muted-foreground/60" aria-hidden />
-              Still open <span className="font-medium text-foreground tabular-nums">{pending}</span>
-            </li>
-          )}
         </ul>
       </div>
 
@@ -219,8 +189,6 @@ function SlaPanel({ data }: { data: ReturnType<typeof summarise> }) {
           );
         })}
       </dl>
-
-      <SlaExclusionNote excluded={data.excluded} />
     </section>
   );
 }
