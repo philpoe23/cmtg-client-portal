@@ -32,7 +32,10 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await pb.collection("portal_users").authWithPassword(email, password);
+      // PocketBase matches the identity field exactly, so "Jane@Company.com"
+      // wouldn't find "jane@company.com". Accounts are stored lowercase (the
+      // invite flow normalises the same way), so normalise before sending.
+      await pb.collection("portal_users").authWithPassword(email.trim().toLowerCase(), password);
       track("login_password_ok", { email, mfa_enabled: Boolean(pb.authStore.record?.totp_enabled) });
 
       if (pb.authStore.record?.totp_enabled) {
