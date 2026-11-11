@@ -1,7 +1,6 @@
 import type { ReportPreviewResponse, TicketRecord } from "@/types";
 import { isBoardAllowed, type BoardAccess } from "@/lib/server/portal-boards";
 import { isSiteAllowed } from "@/lib/server/portal-sites";
-import { isChildTicket } from "@/lib/report-rules";
 
 /** What the signed-in company may see: from getBoardAccess and accounts.portal_sites. */
 export interface TicketAccess {
@@ -70,12 +69,15 @@ export async function fetchReportPreview(company_name: string, start_date: strin
   }
 
   const tickets: Record<string, unknown>[] = Array.isArray(raw.data) ? raw.data : [];
+  if (boards === null && sites === null) {
+    return {
+      total_tickets: raw.total_tickets ?? tickets.length,
+      data: tickets.map(transformTicket),
+    };
+  }
 
-  // Child tickets are never shown in the portal: they're dropped here, hours and all, so the
-  // overview, the table and the export all agree. Boards are also filtered here because the
-  // report API ignores board_ids until it supports the filter; sites are only filtered here.
-  const data = tickets
-    .map(transformTicket)
-    .filter((t) => !isChildTicket(t) && isBoardAllowed(boards, t.Board) && isSiteAllowed(sites, t.Site));
+  // Boards are also filtered here because the report API ignores board_ids until it supports the
+  // filter; sites are only filtered here
+  const data = tickets.map(transformTicket).filter((t) => isBoardAllowed(boards, t.Board) && isSiteAllowed(sites, t.Site));
   return { total_tickets: data.length, data };
 }
