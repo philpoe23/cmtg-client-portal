@@ -15,6 +15,7 @@ import { StepFade } from "@/components/step-fade";
 import { MfaEnrollment } from "@/components/mfa-enrollment";
 import pb from "@/lib/pocketbase";
 import { track } from "@/lib/analytics";
+import { LOGIN_DEBUG, describeLoginError, type LoginDebugInfo } from "@/lib/login-debug";
 import Image from "next/image";
 
 type Step = "credentials" | "mfa" | "mfa-setup";
@@ -27,10 +28,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<LoginDebugInfo | null>(null);
 
   async function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setDebugInfo(null);
     try {
       // PocketBase matches the identity field exactly, so "Jane@Company.com"
       // wouldn't find "jane@company.com". Accounts are stored lowercase (the
@@ -66,6 +69,14 @@ export default function LoginPage() {
       router.refresh();
     } catch (err) {
       track("login_failed", { email, step: "password", error: err instanceof Error ? err.message : String(err) });
+      if (LOGIN_DEBUG) {
+        setDebugInfo(
+          describeLoginError("password", err, {
+            pocketbaseUrl: pb.buildURL(""),
+            identity: email.trim().toLowerCase(),
+          }),
+        );
+      }
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
@@ -75,10 +86,16 @@ export default function LoginPage() {
   async function handleMfa(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setDebugInfo(null);
     try {
       const valid = await verifyTotpLogin(pb.authStore.token, totpCode);
       if (!valid) {
         track("login_failed", { email, step: "mfa", error: "invalid_code" });
+        if (LOGIN_DEBUG) {
+          setDebugInfo(
+            describeLoginError("mfa", new Error("verifyTotpLogin returned false: code rejected, or the password-step token is no longer valid")),
+          );
+        }
         toast.error("Invalid code");
         return;
       }
@@ -90,8 +107,9 @@ export default function LoginPage() {
       // name is already httpOnly, which it is for any returning user.
       router.push("/dashboard");
       router.refresh();
-    } catch {
+    } catch (err) {
       track("login_failed", { email, step: "mfa", error: "verify_error" });
+      if (LOGIN_DEBUG) setDebugInfo(describeLoginError("mfa", err));
       toast.error("Invalid code");
     } finally {
       setLoading(false);
@@ -105,6 +123,7 @@ export default function LoginPage() {
 
   return (
     <AuthShell>
+      {LOGIN_DEBUG && debugInfo && <LoginDebugPanel info={debugInfo} onClose={() => setDebugInfo(null)} />}
       <StepFade
         stepKey={step}
         steps={{
@@ -201,5 +220,25 @@ export default function LoginPage() {
         }}
       />
     </AuthShell>
+  );
+}
+
+function LoginDebugPanel({ info, onClose }: { info: LoginDebugInfo; onClose: () => void }) {
+  const text = JSON.stringify(info, null, 2);
+  return (
+    <div className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-2xl rounded-lg border border-amber-500/60 bg-background shadow-lg">
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
+        <p className="text-sm font-medium">Login debug (NEXT_PUBLIC_DEBUG_LOGIN)</p>
+        <div className="flex gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(text)}>
+            Copy
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+      <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-all p-4 text-left font-mono text-xs">{text}</pre>
+    </div>
   );
 }
