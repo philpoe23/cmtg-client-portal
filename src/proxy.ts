@@ -83,8 +83,10 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all paths except Next.js internals and static assets.
+     * Match all paths except Next.js internals, static assets and /pb (the
+     * PocketBase passthrough rewrite — PocketBase enforces its own auth, and
+     * gating it here would block the login request itself).
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|pb/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
